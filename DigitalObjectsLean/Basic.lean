@@ -1,5 +1,8 @@
 import Mathlib.Data.Set.Basic
 
+-- a Vec is a function that maps that maps [0..n-1] to Object
+abbrev Vec (α : Type) (n : Nat) : Type := Fin n → α
+
 inductive Operation where
   | Insert (i : Nat)
   | Delete (i : Nat)
@@ -11,17 +14,14 @@ mutual
     | subaction (a : Action Object) (mapping : List Nat)
 
   structure Action (Object : Type) where
-    n_objs: Nat
-    relations : List ((Fin n_objs → Object) → Prop)
-    events: List (Event Object)
+    n_objs : Nat
+    relations : List ((Vec Object n_objs) → Prop)
+    events : List (Event Object)
 end
 
 structure Tx (Object : Type) where
   action : Action Object
-  objects : Fin action.n_objs → Object -- fn that maps [0..n_objs) to Object
-
--- def Tx.RelationsHold (tx : Tx Object) : Prop :=
---   ∀ rel ∈ tx.action.relations, rel tx.objects
+  objects : Vec Object n_objs → Object
 
 structure ObjectType (Object : Type) where
   actions : Set (Action Object)
@@ -31,37 +31,67 @@ def Operation.WellFormed (n : Nat) : Operation → Prop
   | .Delete i => i < n
   | .Mutate i j => i < n ∧ j < n
 
--- TODO: The explicit proofs of termination is annoying, figure out a way to remove them
 mutual
-  def Event.WellFormed (n_parent : Nat) (e : Event Object) : Prop :=
-    match e with
-    | .operation op => op.WellFormed n_parent
-    | .subaction a mapping =>
-        mapping.length = a.n_objs ∧
-        (∀ k ∈ mapping, k < n_parent) ∧
-        a.WellFormed
-  termination_by sizeOf e
-  decreasing_by all_goals (simp_wf; omega)
+  inductive Event.WellFormed {Object : Type} : Nat → Event Object → Prop where
+    | operation {n op} :
+        Operation.WellFormed n op →
+        Event.WellFormed n (Event.operation op)
+    | subaction {n} {a : Action Object} {mapping} :
+        mapping.length = a.n_objs →
+        (∀ k ∈ mapping, k < n) →
+        Action.WellFormed a →
+        Event.WellFormed n (Event.subaction a mapping)
 
-  def Action.WellFormed (a : Action Object) : Prop :=
-    -- ∀ e ∈ a.events, e.WellFormed a.n_objs
-    Action.allEventsWellFormed a.n_objs a.events
-  termination_by sizeOf a
-  decreasing_by
-    cases a
-    simp_wf
-    omega
-
-
-  def Action.allEventsWellFormed (n : Nat) : List (Event Object) → Prop
-    | [] => True
-    | e :: rest => e.WellFormed n ∧ Action.allEventsWellFormed n rest
-  termination_by es => sizeOf es
-  decreasing_by all_goals (simp_wf; omega)
+  inductive Action.WellFormed {Object : Type} : Action Object → Prop where
+    | mk {a : Action Object} :
+        (∀ e ∈ a.events, Event.WellFormed a.n_objs e) →
+        Action.WellFormed a
 end
 
 def Tx.WellFormed (tx : Tx Object) : Prop :=
   tx.action.WellFormed
+
+-- Reindex parent's objects through a subaction's mapping
+def reindex {Object : Type} {n_parent : Nat}
+    (objects : Vec Object n_parent)
+    (a : Action Object) (mapping : List Nat)
+    -- the mapping has one entry per subaction slot
+    (h_len : mapping.length = a.n_objs)
+    -- every entry of the mapping is a valid parent slot
+    (h_bound : ∀ k ∈ mapping, k < n_parent) :
+    Vec Object a.n_objs :=
+  fun i =>
+    -- indexed list access with a bounds proof.
+    let k := mapping[i.val]'(by rw [h_len]; exact i.isLt)
+    have : k < n_parent := h_bound _ (List.getElem_mem _)
+    objects ⟨k, this⟩
+
+mutual
+  -- True if P holds at every action and subaction reachable from this event
+  inductive Event.AllSubactions {Object : Type}
+      (P : {n : Nat} → Action Object → (Vec Object n) → Prop) :
+      {n_parent : Nat} → Event Object → (Vec Object n_parent) → Prop where
+    | operation {n_parent} {objects : Vec Object n_parent} {op : Operation} :
+        Event.AllSubactions P (Event.operation op) objects
+    | subaction {n_parent} {objects : Vec Object n_parent}
+        (a : Action Object) (mapping : List Nat)
+        (h_len : mapping.length = a.n_objs)
+        (h_bound : ∀ k ∈ mapping, k < n_parent)
+        (h_rec : Action.AllSubactions P a (reindex objects a mapping h_len h_bound)) :
+        Event.AllSubactions P (Event.subaction a mapping) objects
+
+  inductive Action.AllSubactions {Object : Type}
+      (P : {n : Nat} → Action Object → (Vec Object n) → Prop) :
+      (a : Action Object) → (Vec Object a.n_objs) → Prop where
+    | mk {a : Action Object} {objects : Vec Object a.n_objs}
+        (h_here : P a objects)
+        (h_events : ∀ e ∈ a.events, Event.AllSubactions P e objects) :
+        Action.AllSubactions P a objects
+end
+
+-- def Tx.RelationsHold (tx : Tx Object) : Prop :=
+--   ∀ rel ∈ tx.action.relations, rel tx.objects
+
 
 structure SystemSpec (Object : Type) (State: Type) where
   -- **Global State**
@@ -99,7 +129,6 @@ structure SystemSpec (Object : Type) (State: Type) where
     InConsumed o s → InCreated o s
   genesis_empty :
     ∀ o : Object, ¬ InConsumed o genesis ∧ ¬ InCreated o genesis
-
 
   -- -- **Untyped Events**
 
