@@ -21,7 +21,7 @@ end
 
 structure Tx (Object : Type) where
   action : Action Object
-  objects : Vec Object n_objs → Object
+  objects : List Object
 
 structure ObjectType (Object : Type) where
   actions : Set (Action Object)
@@ -49,41 +49,44 @@ mutual
 end
 
 def Tx.WellFormed (tx : Tx Object) : Prop :=
-  tx.action.WellFormed
+  tx.objects.length = tx.action.n_objs ∧ tx.action.WellFormed
 
--- Reindex parent's objects through a subaction's mapping
-def reindex {Object : Type} {n_parent : Nat}
-    (objects : Vec Object n_parent)
-    (a : Action Object) (mapping : List Nat)
-    -- the mapping has one entry per subaction slot
-    (h_len : mapping.length = a.n_objs)
+-- Reindex parent's objects through a subaction's mapping.
+-- Returns a list of length mapping.length, where the i-th element
+-- is parent_objects[mapping[i]].
+def reindex {Object : Type}
+    (objects : List Object)
+    (mapping : List Nat)
     -- every entry of the mapping is a valid parent slot
-    (h_bound : ∀ k ∈ mapping, k < n_parent) :
-    Vec Object a.n_objs :=
-  fun i =>
-    -- indexed list access with a bounds proof.
-    let k := mapping[i.val]'(by rw [h_len]; exact i.isLt)
-    have : k < n_parent := h_bound _ (List.getElem_mem _)
-    objects ⟨k, this⟩
+    (h_bound : ∀ k ∈ mapping, k < objects.length) :
+    List Object :=
+  mapping.attach.map fun ⟨k, h_mem⟩ =>
+    objects[k]'(h_bound k h_mem)
+
+theorem reindex_length {Object : Type} (objects : List Object) (mapping : List Nat)
+    (h_bound : ∀ k ∈ mapping, k < objects.length) :
+    (reindex objects mapping h_bound).length = mapping.length := by
+  simp [reindex, List.length_map, List.length_attach]
 
 mutual
   -- True if P holds at every action and subaction reachable from this event
   inductive Event.AllSubactions {Object : Type}
-      (P : {n : Nat} → Action Object → (Vec Object n) → Prop) :
-      {n_parent : Nat} → Event Object → (Vec Object n_parent) → Prop where
-    | operation {n_parent} {objects : Vec Object n_parent} {op : Operation} :
+      (P : Action Object → List Object → Prop) :
+      Event Object → List Object → Prop where
+    | operation {objects : List Object} {op : Operation} :
         Event.AllSubactions P (Event.operation op) objects
-    | subaction {n_parent} {objects : Vec Object n_parent}
+    | subaction {objects : List Object}
         (a : Action Object) (mapping : List Nat)
         (h_len : mapping.length = a.n_objs)
-        (h_bound : ∀ k ∈ mapping, k < n_parent)
-        (h_rec : Action.AllSubactions P a (reindex objects a mapping h_len h_bound)) :
+        (h_bound : ∀ k ∈ mapping, k < objects.length)
+        (h_rec : Action.AllSubactions P a (reindex objects mapping h_bound)) :
         Event.AllSubactions P (Event.subaction a mapping) objects
 
   inductive Action.AllSubactions {Object : Type}
-      (P : {n : Nat} → Action Object → (Vec Object n) → Prop) :
-      (a : Action Object) → (Vec Object a.n_objs) → Prop where
-    | mk {a : Action Object} {objects : Vec Object a.n_objs}
+      (P : Action Object → List Object → Prop) :
+      Action Object → List Object → Prop where
+    | mk {a : Action Object} {objects : List Object}
+        (h_len : objects.length = a.n_objs)
         (h_here : P a objects)
         (h_events : ∀ e ∈ a.events, Event.AllSubactions P e objects) :
         Action.AllSubactions P a objects
