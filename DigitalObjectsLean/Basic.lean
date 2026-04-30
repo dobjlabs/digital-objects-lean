@@ -1,8 +1,5 @@
 import Mathlib.Data.Set.Basic
 
--- a Vec is a function that maps that maps [0..n-1] to Object
-abbrev Vec (α : Type) (n : Nat) : Type := Fin n → α
-
 inductive Operation where
   | Insert (i : Nat)
   | Delete (i : Nat)
@@ -11,90 +8,53 @@ inductive Operation where
 mutual
   inductive Event (Object : Type) where
     | operation (op : Operation)
-    | subaction (a : Action Object) (mapping : List Nat)
+    | subaction (a : Action Object) (mapping : Nat → Nat)
 
   structure Action (Object : Type) where
-    n_objs : Nat
-    relations : List ((Vec Object n_objs) → Prop)
+    relations : List ((Nat → Object) → Prop)
     events : List (Event Object)
 end
 
 structure Tx (Object : Type) where
   action : Action Object
-  objects : List Object
+  objects : Nat → Object
 
 structure ObjectType (Object : Type) where
   actions : Set (Action Object)
 
-def Operation.WellFormed (n : Nat) : Operation → Prop
-  | .Insert i => i < n
-  | .Delete i => i < n
-  | .Mutate i j => i < n ∧ j < n
-
-mutual
-  inductive Event.WellFormed {Object : Type} : Nat → Event Object → Prop where
-    | operation {n op} :
-        Operation.WellFormed n op →
-        Event.WellFormed n (Event.operation op)
-    | subaction {n} {a : Action Object} {mapping} :
-        mapping.length = a.n_objs →
-        (∀ k ∈ mapping, k < n) →
-        Action.WellFormed a →
-        Event.WellFormed n (Event.subaction a mapping)
-
-  inductive Action.WellFormed {Object : Type} : Action Object → Prop where
-    | mk {a : Action Object} :
-        (∀ e ∈ a.events, Event.WellFormed a.n_objs e) →
-        Action.WellFormed a
-end
-
-def Tx.WellFormed (tx : Tx Object) : Prop :=
-  tx.objects.length = tx.action.n_objs ∧ tx.action.WellFormed
-
 -- Reindex parent's objects through a subaction's mapping.
--- Returns a list of length mapping.length, where the i-th element
--- is parent_objects[mapping[i]].
 def reindex {Object : Type}
-    (objects : List Object)
-    (mapping : List Nat)
-    -- every entry of the mapping is a valid parent slot
-    (h_bound : ∀ k ∈ mapping, k < objects.length) :
-    List Object :=
-  mapping.attach.map fun ⟨k, h_mem⟩ =>
-    objects[k]'(h_bound k h_mem)
-
-theorem reindex_length {Object : Type} (objects : List Object) (mapping : List Nat)
-    (h_bound : ∀ k ∈ mapping, k < objects.length) :
-    (reindex objects mapping h_bound).length = mapping.length := by
-  simp [reindex, List.length_map, List.length_attach]
+    (objects : Nat → Object)
+    (mapping : Nat → Nat) :
+    Nat → Object :=
+  fun i => objects (mapping i)
 
 mutual
   -- True if P holds at every action and subaction reachable from this event
   inductive Event.AllSubactions {Object : Type}
-      (P : Action Object → List Object → Prop) :
-      Event Object → List Object → Prop where
-    | operation {objects : List Object} {op : Operation} :
+      (P : Action Object → (Nat → Object) → Prop) :
+      Event Object → (Nat → Object) → Prop where
+    | operation {objects : Nat → Object} {op : Operation} :
         Event.AllSubactions P (Event.operation op) objects
-    | subaction {objects : List Object}
-        (a : Action Object) (mapping : List Nat)
-        (h_len : mapping.length = a.n_objs)
-        (h_bound : ∀ k ∈ mapping, k < objects.length)
-        (h_rec : Action.AllSubactions P a (reindex objects mapping h_bound)) :
+    | subaction {objects : Nat → Object}
+        (a : Action Object) (mapping : Nat → Nat)
+        (h_rec : Action.AllSubactions P a (reindex objects mapping)) :
         Event.AllSubactions P (Event.subaction a mapping) objects
 
+  -- True if P holds at this action and every subaction reachable from it
   inductive Action.AllSubactions {Object : Type}
-      (P : Action Object → List Object → Prop) :
-      Action Object → List Object → Prop where
-    | mk {a : Action Object} {objects : List Object}
-        (h_len : objects.length = a.n_objs)
+      (P : Action Object → (Nat → Object) → Prop) :
+      Action Object → (Nat → Object) → Prop where
+    | mk {a : Action Object} {objects : Nat → Object}
         (h_here : P a objects)
         (h_events : ∀ e ∈ a.events, Event.AllSubactions P e objects) :
         Action.AllSubactions P a objects
 end
 
--- def Tx.RelationsHold (tx : Tx Object) : Prop :=
---   ∀ rel ∈ tx.action.relations, rel tx.objects
-
+def Tx.RelationsHold {Object : Type} (tx : Tx Object) : Prop :=
+  Action.AllSubactions
+    (fun a objects => ∀ rel ∈ a.relations, rel objects)
+    tx.action tx.objects
 
 structure SystemSpec (Object : Type) (State: Type) where
   -- **Global State**
@@ -156,7 +116,7 @@ structure SystemSpec (Object : Type) (State: Type) where
 
   -- -- **Typed Events**
 
-  -- typeOf (o : Object) : ObjectType Object
+  typeOf (o : Object) : Option (ObjectType Object)
 
   -- Insert (o : Object) (s : State) (t : Nat) : Prop
   -- Delete (o : Object) (s : State) (t : Nat) : Prop
