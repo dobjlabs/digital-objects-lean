@@ -1,9 +1,28 @@
 import Mathlib.Data.Set.Basic
 
+-- better error messages for a newbie like me.  Forces writing implicit
+-- arguments with '{ ... }' notation, but gives better error messages when
+-- using undefined symbols
+set_option autoImplicit false
+
 inductive Operation where
-  | Insert (i : Nat)
-  | Delete (i : Nat)
-  | Mutate (i j : Nat)
+  | Insert (i : Nat) -- Create i
+  | Delete (i : Nat) -- Consume i
+  | Mutate (i j : Nat) -- Consume i and create j
+
+def Operation.Creates {Object : Type}
+    (op : Operation) (objects : Nat → Object) (o : Object) : Prop :=
+  match op with
+  | .Insert i => objects i = o
+  | .Delete _ => False
+  | .Mutate _ j => objects j = o
+
+def Operation.Consumes {Object : Type}
+    (op : Operation) (objects : Nat → Object) (o : Object) : Prop :=
+  match op with
+  | .Insert _ => False
+  | .Delete i => objects i = o
+  | .Mutate i _ => objects i = o
 
 mutual
   inductive Event (Object : Type) where
@@ -51,11 +70,104 @@ mutual
         Action.AllSubactions P a objects
 end
 
+mutual
+  inductive Event.SomeOp {Object : Type}
+      (P : Operation → (Nat → Object) → Prop) :
+      Event Object → (Nat → Object) → Prop where
+    | here {objects : Nat → Object} {op : Operation}
+        (h : P op objects) :
+        Event.SomeOp P (Event.operation op) objects
+    | inSub {objects : Nat → Object}
+        (a : Action Object) (mapping : Nat → Nat)
+        (h_rec : Action.SomeOp P a (reindex objects mapping)) :
+        Event.SomeOp P (Event.subaction a mapping) objects
+
+  inductive Action.SomeOp {Object : Type}
+      (P : Operation → (Nat → Object) → Prop) :
+      Action Object → (Nat → Object) → Prop where
+    | mk {a : Action Object} {objects : Nat → Object} {e : Event Object}
+        (h_mem : e ∈ a.events)
+        (h_rec : Event.SomeOp P e objects) :
+        Action.SomeOp P a objects
+end
+
 def Tx.RelationsHold {Object : Type} (tx : Tx Object) : Prop :=
   Action.AllSubactions
     (fun a objects => ∀ rel ∈ a.relations, rel objects)
     tx.action tx.objects
 
+def Tx.Creates {Object : Type} (tx : Tx Object) (o : Object) : Prop :=
+  Action.SomeOp (fun op objs => op.Creates objs o) tx.action tx.objects
+
+def Tx.Consumes {Object : Type} (tx : Tx Object) (o : Object) : Prop :=
+  Action.SomeOp (fun op objs => op.Consumes objs o) tx.action tx.objects
+
+def InCreated {Object : Type} (o : Object) (h : List (Tx Object)) : Prop :=
+  ∃ tx ∈ h, tx.Creates o
+
+def InConsumed {Object : Type} (o : Object) (h : List (Tx Object)) : Prop :=
+  ∃ tx ∈ h, tx.Consumes o
+
+-- The history is defined as a list of transactions, where the head is the most
+-- recent transaction.
+structure SystemSpec (Object : Type) where
+  -- Properties that an implementation must define --
+  -- A transaction is valid to append to a history
+  ValidTx : List (Tx Object) → Tx Object → Prop
+  typeOf (o : Object) : Option (ObjectType Object)
+
+  -- Theorems that an implementation must prove --
+
+  -- TODO: Update to support consuming an object created in the tx
+  validTx_consumes_created :
+    ∀ h tx o, ValidTx h tx → tx.Consumes o → InCreated o h
+
+  validTx_no_double_create :
+    ∀ h tx o, ValidTx h tx → tx.Creates o → ¬ InCreated o h
+
+  validTx_no_double_consume :
+    ∀ h tx o, ValidTx h tx → tx.Consumes o → ¬ InConsumed o h
+
+  -- validTx_no_intra_double_create :
+  --   ∀ h tx, ValidTx h tx → ∀ o₁ o₂, (o₁ ≠ o₂) ∧ ¬ (tx.Creates o₁ ∧ tx.Creates o₂)
+
+  -- validTx_no_intra_double_consume :
+  --   ∀ h tx, ValidTx h tx → ∀ o, /- tx consumes o at most once -/
+
+  validTx_relations_hold :
+    ∀ h tx, ValidTx h tx → Tx.RelationsHold tx
+
+-- Definitions
+
+namespace SystemSpec
+
+def ValidHistory {Object : Type} (spec : SystemSpec Object) :
+    List (Tx Object) → Prop
+  | [] => True
+  | tx :: history => spec.ValidHistory history ∧ spec.ValidTx history tx
+
+end SystemSpec
+
+def Reaches  {Object : Type} (h h' : List (Tx Object)) : Prop :=  h.IsSuffix h'
+
+-- Generic theorems with proofs (for all SystemSpec)
+
+theorem InCreated.mono {Object : Type} {o : Object} {h h' : List (Tx Object)} :
+    Reaches h h' → InCreated o h → InCreated o h' := by
+  intro hreach ⟨tx, htx_mem, htx_creates⟩
+  exact ⟨tx, hreach.mem htx_mem, htx_creates⟩
+
+theorem InConsumed.mono {Object : Type} {o : Object} {h h' : List (Tx Object)} :
+    Reaches h h' → InCreated o h → InCreated o h' := by
+  intro hreach ⟨tx, htx_mem, htx_creates⟩
+  exact ⟨tx, hreach.mem htx_mem, htx_creates⟩
+
+
+theorem genesis_empty {Object : Type} {o : Object} :
+    (¬ InCreated o []) ∧ (¬ InConsumed o []) := by
+    simp [InCreated, InConsumed]
+
+/-
 structure SystemSpec (Object : Type) (State: Type) where
   -- **Global State**
 
@@ -93,28 +205,28 @@ structure SystemSpec (Object : Type) (State: Type) where
   genesis_empty :
     ∀ o : Object, ¬ InConsumed o genesis ∧ ¬ InCreated o genesis
 
-  -- -- **Untyped Events**
+  -- **Untyped Events**
 
-  -- UntypedInsert (o : Object) (s : State) (t : Nat) : Prop
-  -- UntypedDelete (o : Object) (s : State) (t : Nat) : Prop
-  -- UntypedMutate (o o': Object) (s : State) (t : Nat) : Prop
+  UntypedInsert (o : Object) (s : State) (t : Nat) : Prop
+  UntypedDelete (o : Object) (s : State) (t : Nat) : Prop
+  UntypedMutate (o o': Object) (s : State) (t : Nat) : Prop
 
-  -- -- Insert: the object is in Created and not in Consumed
-  -- untypedInsert_prop (o : Object) (s : State) (t : Nat) :
-  --   UntypedInsert o s t →
-  --     InCreated o s t ∧ NotInConsumed o s t
+  -- Insert: the object is in Created and not in Consumed
+  untypedInsert_prop (o : Object) (s : State) (t : Nat) :
+    UntypedInsert o s t →
+      InCreated o s t ∧ NotInConsumed o s t
 
-  -- -- Delete: the object was in Created and not in Consumed, afterwards it's in Consumed
-  -- untypedDelete_prop (o : Object) (s : State) (t : Nat) (ht : t > 0) :
-  --   UntypedDelete o s t →
-  --     InCreated o s (t-1) ∧ NotInConsumed o s (t-1) ∧ InConsumed o s t
+  -- Delete: the object was in Created and not in Consumed, afterwards it's in Consumed
+  untypedDelete_prop (o : Object) (s : State) (t : Nat) (ht : t > 0) :
+    UntypedDelete o s t →
+      InCreated o s (t-1) ∧ NotInConsumed o s (t-1) ∧ InConsumed o s t
 
-  -- -- Mutate: delete previous object, insert new one
-  -- untypedMutate_prop (o o' : Object) (s : State) (t : Nat) :
-  --   UntypedMutate o o' s t →
-  --     UntypedDelete o' s t ∧ UntypedInsert o s t
+  -- Mutate: delete previous object, insert new one
+  untypedMutate_prop (o o' : Object) (s : State) (t : Nat) :
+    UntypedMutate o o' s t →
+      UntypedDelete o' s t ∧ UntypedInsert o s t
 
-  -- -- **Typed Events**
+  -- **Typed Events**
 
   typeOf (o : Object) : Option (ObjectType Object)
 
@@ -129,3 +241,4 @@ structure SystemSpec (Object : Type) (State: Type) where
   --     a ∈ (typeOf o).actions ∧
   --     e ∈ a.tx_action.events ∧
   --     e = TxEvent.operation TxOperation.Mutate
+-/
