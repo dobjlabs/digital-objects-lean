@@ -27,12 +27,6 @@ def ConcreteOp.toEffects {Object : Type} : @ConcreteOp Object → List (@Effect 
   | .delete o => [.consume o]
   | .mutate o₁ o₂ => [.consume o₁, .create o₂]
 
--- Mutation preserves object type
-def ConcreteOp.TypePreserving {Object : Type}
-  (typeOf : Object → (ObjectType Object)): (@ConcreteOp Object) → Prop
-  | .mutate o₁ o₂ => (typeOf o₁) = (typeOf o₂)
-  | _ => True
-
 -- def SymbolicOp.Creates {Object : Type}
 --     (op : SymbolicOp) (objects : Nat → Object) (o : Object) : Prop :=
 --   match op with
@@ -46,7 +40,7 @@ def ConcreteOp.TypePreserving {Object : Type}
 --   | .insert _ => False
 --   | .delete i => objects i = o
 --   | .mutate i _ => objects i = o
- 
+
 mutual
   inductive Event (Object : Type) where
     | operation (op : SymbolicOp)
@@ -57,23 +51,18 @@ mutual
     events : List (Event Object)
 end
 
-mutual
-  def Event.size {Object : Type} : Event Object → Nat
-    | .operation _ => 1
-    | .subaction a _ => 1 + a.size
-    termination_by e => sizeOf e
-
-  def Action.size {Object : Type} (a : Action Object) : Nat :=
-    1 + (a.events.attach.map (fun ⟨e, _⟩ => e.size)).sum
-    termination_by sizeOf a
-end
-
 structure Tx (Object : Type) where
   action : Action Object
   objects : Nat → Object
 
 structure ObjectType (Object : Type) where
   actions : Set (Action Object)
+
+-- Mutation preserves object type
+def ConcreteOp.TypePreserving {Object : Type}
+  (typeOf : Object → (ObjectType Object)): (@ConcreteOp Object) → Prop
+  | .mutate o₁ o₂ => (typeOf o₁) = (typeOf o₂)
+  | _ => True
 
 -- Reindex parent's objects through a subaction's mapping.
 def reindex {Object : Type}
@@ -96,10 +85,8 @@ mutual
   termination_by sizeOf a
   decreasing_by
     rename_i h
-    have := List.sizeOf_lt_of_mem h
-    cases a
-    simp_all
-    omega
+    have := List.sizeOf_lt_of_mem h;
+    cases a; simp_all; omega
 end
 
 mutual
