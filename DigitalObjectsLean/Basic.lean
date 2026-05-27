@@ -5,33 +5,67 @@ import Mathlib.Data.Set.Basic
 -- using undefined symbols
 set_option autoImplicit false
 
-inductive Operation where
-  | Insert (i : Nat) -- Create i
-  | Delete (i : Nat) -- Consume i
-  | Mutate (i j : Nat) -- Consume i and create j
+inductive Effect {Object : Type} where
+  | create (o : Object)
+  | consume (o : Object)
 
-def Operation.Creates {Object : Type}
-    (op : Operation) (objects : Nat → Object) (o : Object) : Prop :=
-  match op with
-  | .Insert i => objects i = o
-  | .Delete _ => False
-  | .Mutate _ j => objects j = o
+inductive Op (α : Type) where
+  | insert (x : α)
+  | delete (x : α)
+  | mutate (from_ to_ : α)
 
-def Operation.Consumes {Object : Type}
-    (op : Operation) (objects : Nat → Object) (o : Object) : Prop :=
-  match op with
-  | .Insert _ => False
-  | .Delete i => objects i = o
-  | .Mutate i _ => objects i = o
+abbrev SymbolicOp := Op Nat
+abbrev ConcreteOp {Object : Type} := Op Object
 
+def SymbolicOp.map {Object : Type} (objects : Nat → Object) : SymbolicOp → (@ConcreteOp Object)
+  | .insert i => .insert (objects i)
+  | .delete i => .delete (objects i)
+  | .mutate i j => .mutate (objects i) (objects j)
+
+def ConcreteOp.toEffects {Object : Type} : @ConcreteOp Object → List (@Effect Object)
+  | .insert o => [.create o]
+  | .delete o => [.consume o]
+  | .mutate o₁ o₂ => [.consume o₁, .create o₂]
+
+-- Mutation preserves object type
+def ConcreteOp.TypePreserving {Object : Type}
+  (typeOf : Object → (ObjectType Object)): (@ConcreteOp Object) → Prop
+  | .mutate o₁ o₂ => (typeOf o₁) = (typeOf o₂)
+  | _ => True
+
+-- def SymbolicOp.Creates {Object : Type}
+--     (op : SymbolicOp) (objects : Nat → Object) (o : Object) : Prop :=
+--   match op with
+--   | .insert i => objects i = o
+--   | .delete _ => False
+--   | .mutate _ j => objects j = o
+-- 
+-- def SymbolicOp.Consumes {Object : Type}
+--     (op : SymbolicOp) (objects : Nat → Object) (o : Object) : Prop :=
+--   match op with
+--   | .insert _ => False
+--   | .delete i => objects i = o
+--   | .mutate i _ => objects i = o
+ 
 mutual
   inductive Event (Object : Type) where
-    | operation (op : Operation)
+    | operation (op : SymbolicOp)
     | subaction (a : Action Object) (mapping : Nat → Nat)
 
   structure Action (Object : Type) where
     relations : List ((Nat → Object) → Prop)
     events : List (Event Object)
+end
+
+mutual
+  def Event.size {Object : Type} : Event Object → Nat
+    | .operation _ => 1
+    | .subaction a _ => 1 + a.size
+    termination_by e => sizeOf e
+
+  def Action.size {Object : Type} (a : Action Object) : Nat :=
+    1 + (a.events.attach.map (fun ⟨e, _⟩ => e.size)).sum
+    termination_by sizeOf a
 end
 
 structure Tx (Object : Type) where
@@ -49,11 +83,31 @@ def reindex {Object : Type}
   fun i => objects (mapping i)
 
 mutual
+  def Event.concreteOps {Object : Type}
+    (e : Event Object) (objects : Nat → Object) : List (@ConcreteOp Object) :=
+    match e with
+    | .operation op => [op.map objects]
+    | .subaction a mapping => a.concreteOps (reindex objects mapping)
+  termination_by sizeOf e
+
+  def Action.concreteOps {Object : Type}
+    (a : Action Object) (objects : Nat → Object) : List (@ConcreteOp Object) :=
+    (a.events.attach.map fun ⟨e, _⟩ => e.concreteOps objects).flatten
+  termination_by sizeOf a
+  decreasing_by
+    rename_i h
+    have := List.sizeOf_lt_of_mem h
+    cases a
+    simp_all
+    omega
+end
+
+mutual
   -- True if P holds at every action and subaction reachable from this event
   inductive Event.AllSubactions {Object : Type}
       (P : Action Object → (Nat → Object) → Prop) :
       Event Object → (Nat → Object) → Prop where
-    | operation {objects : Nat → Object} {op : Operation} :
+    | operation {objects : Nat → Object} {op : SymbolicOp} :
         Event.AllSubactions P (Event.operation op) objects
     | subaction {objects : Nat → Object}
         (a : Action Object) (mapping : Nat → Nat)
@@ -72,9 +126,9 @@ end
 
 mutual
   inductive Event.SomeOp {Object : Type}
-      (P : Operation → (Nat → Object) → Prop) :
+      (P : SymbolicOp → (Nat → Object) → Prop) :
       Event Object → (Nat → Object) → Prop where
-    | here {objects : Nat → Object} {op : Operation}
+    | here {objects : Nat → Object} {op : SymbolicOp}
         (h : P op objects) :
         Event.SomeOp P (Event.operation op) objects
     | inSub {objects : Nat → Object}
@@ -83,7 +137,7 @@ mutual
         Event.SomeOp P (Event.subaction a mapping) objects
 
   inductive Action.SomeOp {Object : Type}
-      (P : Operation → (Nat → Object) → Prop) :
+      (P : SymbolicOp → (Nat → Object) → Prop) :
       Action Object → (Nat → Object) → Prop where
     | mk {a : Action Object} {objects : Nat → Object} {e : Event Object}
         (h_mem : e ∈ a.events)
@@ -114,7 +168,7 @@ structure SystemSpec (Object : Type) where
   -- Properties that an implementation must define --
   -- A transaction is valid to append to a history
   ValidTx : List (Tx Object) → Tx Object → Prop
-  typeOf (o : Object) : Option (ObjectType Object)
+  typeOf (o : Object) : ObjectType Object
 
   -- Theorems that an implementation must prove --
 
