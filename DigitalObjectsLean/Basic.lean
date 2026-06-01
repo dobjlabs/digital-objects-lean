@@ -71,23 +71,46 @@ def reindex {Object : Type}
     Nat → Object :=
   fun i => objects (mapping i)
 
+-- mutual
+--   def Event.opsLength {Object : Type}
+--     (e : Event Object) : Nat :=
+--     match e with
+--     | .operation _ => 1
+--     | .subaction a _ => a.opsLength
+--   termination_by sizeOf e
+--
+--   def Action.opsLength {Object : Type}
+--     (a : Action Object) : Nat :=
+--     (a.events.attach.map fun ⟨e, _⟩ => e.opsLength).sum
+--   termination_by sizeOf a
+--   decreasing_by
+--     rename_i h
+--     have := List.sizeOf_lt_of_mem h;
+--     cases a; simp_all; omega
+-- end
+
 mutual
   def Event.concreteOps {Object : Type}
     (e : Event Object) (objects : Nat → Object) : List (@ConcreteOp Object) :=
     match e with
     | .operation op => [op.map objects]
     | .subaction a mapping => a.concreteOps (reindex objects mapping)
-  termination_by sizeOf e
+  termination_by e.opsLength
 
   def Action.concreteOps {Object : Type}
     (a : Action Object) (objects : Nat → Object) : List (@ConcreteOp Object) :=
     (a.events.attach.map fun ⟨e, _⟩ => e.concreteOps objects).flatten
-  termination_by sizeOf a
-  decreasing_by
-    rename_i h
-    have := List.sizeOf_lt_of_mem h;
-    cases a; simp_all; omega
+  termination_by a.opsLength
 end
+
+-- theorem Action.concreteOps_length {Object : Type} (a : Action Object) (objects : Nat → Object) :
+--   (a.concreteOps objects).length = a.opsLength := by
+--   sorry
+
+def Action.Effects {Object : Type}
+  (a : Action Object) (objects : Nat → Object) : List (@Effect Object) :=
+  (a.concreteOps objects).flatMap (fun op => op.toEffects)
+
 
 mutual
   -- True if P holds at every action and subaction reachable from this event
@@ -111,43 +134,55 @@ mutual
         Action.AllSubactions P a objects
 end
 
-mutual
-  inductive Event.SomeOp {Object : Type}
-      (P : SymbolicOp → (Nat → Object) → Prop) :
-      Event Object → (Nat → Object) → Prop where
-    | here {objects : Nat → Object} {op : SymbolicOp}
-        (h : P op objects) :
-        Event.SomeOp P (Event.operation op) objects
-    | inSub {objects : Nat → Object}
-        (a : Action Object) (mapping : Nat → Nat)
-        (h_rec : Action.SomeOp P a (reindex objects mapping)) :
-        Event.SomeOp P (Event.subaction a mapping) objects
-
-  inductive Action.SomeOp {Object : Type}
-      (P : SymbolicOp → (Nat → Object) → Prop) :
-      Action Object → (Nat → Object) → Prop where
-    | mk {a : Action Object} {objects : Nat → Object} {e : Event Object}
-        (h_mem : e ∈ a.events)
-        (h_rec : Event.SomeOp P e objects) :
-        Action.SomeOp P a objects
-end
+-- mutual
+--   inductive Event.SomeOp {Object : Type}
+--       (P : SymbolicOp → (Nat → Object) → Prop) :
+--       Event Object → (Nat → Object) → Prop where
+--     | here {objects : Nat → Object} {op : SymbolicOp}
+--         (h : P op objects) :
+--         Event.SomeOp P (Event.operation op) objects
+--     | inSub {objects : Nat → Object}
+--         (a : Action Object) (mapping : Nat → Nat)
+--         (h_rec : Action.SomeOp P a (reindex objects mapping)) :
+--         Event.SomeOp P (Event.subaction a mapping) objects
+--
+--   inductive Action.SomeOp {Object : Type}
+--       (P : SymbolicOp → (Nat → Object) → Prop) :
+--       Action Object → (Nat → Object) → Prop where
+--     | mk {a : Action Object} {objects : Nat → Object} {e : Event Object}
+--         (h_mem : e ∈ a.events)
+--         (h_rec : Event.SomeOp P e objects) :
+--         Action.SomeOp P a objects
+-- end
 
 def Tx.RelationsHold {Object : Type} (tx : Tx Object) : Prop :=
   Action.AllSubactions
     (fun a objects => ∀ rel ∈ a.relations, rel objects)
     tx.action tx.objects
 
-def Tx.Creates {Object : Type} (tx : Tx Object) (o : Object) : Prop :=
-  Action.SomeOp (fun op objs => op.Creates objs o) tx.action tx.objects
+-- A Tx can't double-create nor double-consume
+def Tx.NoDoubleEffect {Object : Type} (tx : Tx Object) : Prop :=
+  (tx.action.Effects tx.objects).Nodup
 
-def Tx.Consumes {Object : Type} (tx : Tx Object) (o : Object) : Prop :=
-  Action.SomeOp (fun op objs => op.Consumes objs o) tx.action tx.objects
+def Tx.CreatesAt {Object : Type} (tx : Tx Object) (o : Object) (i : Nat) : Prop :=
+  let effects := (tx.action.Effects tx.objects)
+  effects[i]? = some (Effect.create o)
+
+def Tx.ConsumesAt {Object : Type} (tx : Tx Object) (o : Object) (i : Nat) : Prop :=
+  let effects := (tx.action.Effects tx.objects)
+  effects[i]? = some (Effect.consume o)
+
+-- def Tx.Creates {Object : Type} (tx : Tx Object) (o : Object) : Prop :=
+--   ∃ op ∈ (tx.action.concreteOps tx.objects), .create o ∈ op.toEffects
+--
+-- def Tx.Consumes {Object : Type} (tx : Tx Object) (o : Object) : Prop :=
+--   ∃ op ∈ (tx.action.concreteOps tx.objects), .consume o ∈ op.toEffects
 
 def InCreated {Object : Type} (o : Object) (h : List (Tx Object)) : Prop :=
-  ∃ tx ∈ h, tx.Creates o
+  ∃ tx ∈ h, ∃ i, tx.CreatesAt o i
 
 def InConsumed {Object : Type} (o : Object) (h : List (Tx Object)) : Prop :=
-  ∃ tx ∈ h, tx.Consumes o
+  ∃ tx ∈ h, ∃ i, tx.ConsumesAt o i
 
 -- The history is defined as a list of transactions, where the head is the most
 -- recent transaction.
@@ -159,21 +194,23 @@ structure SystemSpec (Object : Type) where
 
   -- Theorems that an implementation must prove --
 
-  -- TODO: Update to support consuming an object created in the tx
-  validTx_consumes_created :
-    ∀ h tx o, ValidTx h tx → tx.Consumes o → InCreated o h
+  -- A consumes effect is valid if
+  -- * the object was previously created (in a previous tx, or in a previous effect in the tx)
+  -- * the object was not previously consumed (in a previous tx, or in a previous effect in the tx)
+  validTx_consumes :
+    ∀ h tx, ValidTx h tx →
+    let effects := (tx.action.Effects tx.objects)
+    ∀ o (i : Fin effects.length), effects[i]? = some (Effect.consume o) →
+    ((InCreated o h) ∨ (∃ j < i, effects[j]? = some (Effect.create o))) ∧
+    ¬ ((InConsumed o h) ∨ (∃ j < i, effects[j]? = some (Effect.consume o)))
 
-  validTx_no_double_create :
-    ∀ h tx o, ValidTx h tx → tx.Creates o → ¬ InCreated o h
-
-  validTx_no_double_consume :
-    ∀ h tx o, ValidTx h tx → tx.Consumes o → ¬ InConsumed o h
-
-  -- validTx_no_intra_double_create :
-  --   ∀ h tx, ValidTx h tx → ∀ o₁ o₂, (o₁ ≠ o₂) ∧ ¬ (tx.Creates o₁ ∧ tx.Creates o₂)
-
-  -- validTx_no_intra_double_consume :
-  --   ∀ h tx, ValidTx h tx → ∀ o, /- tx consumes o at most once -/
+  -- A create effect is valid if
+  -- * the object was not previously created (in a previous tx, or in a previous effect in the tx)
+  validTx_create :
+    ∀ h tx, ValidTx h tx →
+    let effects := (tx.action.Effects tx.objects)
+    ∀ o (i : Fin effects.length), effects[i]? = some (Effect.create o) →
+    ¬ ((InCreated o h) ∨ (∃ j < i, effects[j]? = some (Effect.create o)))
 
   validTx_relations_hold :
     ∀ h tx, ValidTx h tx → Tx.RelationsHold tx
