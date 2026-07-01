@@ -1,15 +1,18 @@
-name = "digital-objects-lean"
+name = "digital-objects"
 version = "0.1.0"
-defaultTargets = ["digital-objects-lean"]
+defaultTargets = ["DigitalObjects"]
 
 [[lean_lib]]
-name = "DigitalObjectsLean"
-
-[[lean_exe]]
-name = "digital-objects-lean"
-root = "Main"
+name = "DigitalObjects"
 
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.29.1"
+
+[[leanOptions]]
+# better error messages for a newbie like me.  Forces writing implicit
+# arguments with '{ ... }' notation, but gives better error messages when
+# using undefined symbols.
+name = "autoImplicit"
+value = false

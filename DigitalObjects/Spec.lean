@@ -1,10 +1,5 @@
 import Mathlib.Data.Set.Basic
 
--- better error messages for a newbie like me.  Forces writing implicit
--- arguments with '{ ... }' notation, but gives better error messages when
--- using undefined symbols
-set_option autoImplicit false
-
 -- Type: Observable effect on the system state
 inductive Effect {Object : Type} where
   | create (o : Object)
@@ -56,7 +51,7 @@ structure Tx (Object : Type) where
 
 -- Type: The set of valid actions of an object
 structure ObjectType (Object : Type) where
-  actions : Set (Action Object)
+  actions : List (Action Object)
 
 -- Prop: Mutation preserves object type
 def ConcreteOp.TypePreserving {Object : Type}
@@ -235,9 +230,9 @@ theorem InCreated.mono {Object : Type} {o : Object} {h h' : List (Tx Object)} :
 
 -- Theorem: If consumed before, consumed after
 theorem InConsumed.mono {Object : Type} {o : Object} {h h' : List (Tx Object)} :
-    Reaches h h' → InCreated o h → InCreated o h' := by
-  intro hreach ⟨tx, htx_mem, htx_creates⟩
-  exact ⟨tx, hreach.mem htx_mem, htx_creates⟩
+    Reaches h h' → InConsumed o h → InConsumed o h' := by
+  intro hreach ⟨tx, htx_mem, htx_consumes⟩
+  exact ⟨tx, hreach.mem htx_mem, htx_consumes⟩
 
 -- Thereom: The genesis has no created or consumed objects
 theorem genesis_empty {Object : Type} {o : Object} :
