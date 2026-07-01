@@ -1,7 +1,7 @@
 import Mathlib.Data.Set.Basic
 
 -- Type: Observable effect on the system state
-inductive Effect {Object : Type} where
+inductive Effect (Object : Type) where
   | create (o : Object)
   | consume (o : Object)
 
@@ -21,7 +21,7 @@ def SymbolicOp.map {Object : Type} (objects : Nat → Object) : SymbolicOp → (
   | .mutate i j => .mutate (objects i) (objects j)
 
 -- Fun: Return the effects of a concrete operation
-def ConcreteOp.toEffects {Object : Type} : @ConcreteOp Object → List (@Effect Object)
+def ConcreteOp.toEffects {Object : Type} : @ConcreteOp Object → List (Effect Object)
   | .insert o => [.create o]
   | .delete o => [.consume o]
   | .mutate o₁ o₂ => [.consume o₁, .create o₂]
@@ -107,7 +107,7 @@ end
 
 -- Fun: List of effects of an action
 def Action.effects {Object : Type}
-  (a : Action Object) (objects : Nat → Object) : List (@Effect Object) :=
+  (a : Action Object) (objects : Nat → Object) : List (Effect Object) :=
   (a.concreteOps objects).flatMap (fun op => op.toEffects)
 
 
