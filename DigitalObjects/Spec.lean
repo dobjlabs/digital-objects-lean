@@ -5,6 +5,9 @@ inductive Effect (Object : Type) where
   | create (o : Object)
   | consume (o : Object)
 
+-- Fun: 
+def ValidEffects {Object : Type} (created consumed : Set Object)
+
 -- Type: Operation affecting objects (symbolic or concrete)
 inductive Op (α : Type) where
   | insert (x : α)
@@ -151,15 +154,15 @@ def Tx.ConsumesAt {Object : Type} (tx : Tx Object) (o : Object) (i : Nat) : Prop
 
 -- Prop: The object has been created in the history
 def InCreated {Object : Type} (o : Object) (h : List (Tx Object)) : Prop :=
-  ∃ tx ∈ h, ∃ i, tx.CreatesAt o i
+  ∃ tx ∈ h, Effect.create o ∈ tx.action.effects tx.objects
 
 -- Prop: The object has been consumed in the history
 def InConsumed {Object : Type} (o : Object) (h : List (Tx Object)) : Prop :=
-  ∃ tx ∈ h, ∃ i, tx.ConsumesAt o i
+  ∃ tx ∈ h, Effect.consume o ∈ tx.action.effects tx.objects
 
 -- The history is defined as a list of transactions, where the head is the most
 -- recent transaction.
-structure SystemSpec (Object : Type) where
+structure SystemSpec (Object : Type) [DecidableEq Object] where
   -- Properties that an implementation must define --
   -- Prop: A transaction is valid to append to a history
   ValidTx : List (Tx Object) → Tx Object → Prop
@@ -189,9 +192,7 @@ structure SystemSpec (Object : Type) where
   -- Obligation: A mutate operation is valid if it preserves the type of the object
   validTx_mutate :
     ∀ h tx, ValidTx h tx →
-    let concrete_ops := (tx.action.concreteOps tx.objects)
-    ∀ op (i : Fin concrete_ops.length), concrete_ops[i]? = some op →
-    op.TypePreserving typeOf
+    ∀ op ∈ (tx.action.concreteOps tx.objects), op.TypePreserving typeOf
     -- TODO: Maybe we also want to say that the identity is preserved
 
   -- Obligation: A transaction is valid if all the reations in actions and subactions hold
