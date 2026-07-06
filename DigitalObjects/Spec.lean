@@ -5,8 +5,13 @@ inductive Effect (Object : Type) where
   | create (o : Object)
   | consume (o : Object)
 
--- Fun: 
-def ValidEffects {Object : Type} (created consumed : Set Object)
+-- Prop: The effect list is valid given the sets of already created/consumed
+-- objects: each create is fresh, each consume was created and not yet consumed
+def ValidEffects {Object : Type} (created consumed : Set Object) :
+    List (Effect Object) → Prop
+  | [] => True
+  | .create o :: es => o ∉ created ∧ ValidEffects (insert o created) consumed es
+  | .consume o :: es => o ∈ created ∧ o ∉ consumed ∧ ValidEffects created (insert o consumed) es
 
 -- Type: Operation affecting objects (symbolic or concrete)
 inductive Op (α : Type) where
@@ -171,23 +176,15 @@ structure SystemSpec (Object : Type) [DecidableEq Object] where
 
   -- Theorems that an implementation must prove --
 
-  -- Obligation: A consumes effect is valid if
+  -- Obligation: The effects in a tx are valid:
+  -- create:
+  -- * the object was not previously created (in a previous tx, or in a previous effect in the tx)
+  -- consume:
   -- * the object was previously created (in a previous tx, or in a previous effect in the tx)
   -- * the object was not previously consumed (in a previous tx, or in a previous effect in the tx)
-  validTx_consume :
+  validTx_effects :
     ∀ h tx, ValidTx h tx →
-    let effects := (tx.action.effects tx.objects)
-    ∀ o (i : Fin effects.length), effects[i]? = some (Effect.consume o) →
-    ((InCreated o h) ∨ (∃ j < i, effects[j]? = some (Effect.create o))) ∧
-    ¬ ((InConsumed o h) ∨ (∃ j < i, effects[j]? = some (Effect.consume o)))
-
-  -- Obligation: A create effect is valid if
-  -- * the object was not previously created (in a previous tx, or in a previous effect in the tx)
-  validTx_create :
-    ∀ h tx, ValidTx h tx →
-    let effects := (tx.action.effects tx.objects)
-    ∀ o (i : Fin effects.length), effects[i]? = some (Effect.create o) →
-    ¬ ((InCreated o h) ∨ (∃ j < i, effects[j]? = some (Effect.create o)))
+    ValidEffects {o | InCreated o h} {o | InConsumed o h} (tx.action.effects tx.objects)
 
   -- Obligation: A mutate operation is valid if it preserves the type of the object
   validTx_mutate :
@@ -211,7 +208,7 @@ structure SystemSpec (Object : Type) [DecidableEq Object] where
 namespace SystemSpec
 
 -- Prop: The history is valid.  An sound implementation must prove this proposition.
-def ValidHistory {Object : Type} (spec : SystemSpec Object) :
+def ValidHistory {Object : Type} [DecidableEq Object] (spec : SystemSpec Object) :
     List (Tx Object) → Prop
   | [] => True
   | tx :: history => spec.ValidHistory history ∧ spec.ValidTx history tx

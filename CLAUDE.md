@@ -75,8 +75,9 @@ proves the obligations. Keep that separation.
   can make reasonable simplifications in the implementation and we can even
   provide axioms to make proving easier as long as they can be clearly
   justified.  The implementation in Lean will define the functions that the
-  synchronizer executes.  For this reason some of the specification
-  propositions may need to be decidable/computable.
+  synchronizer executes as well as the constraints that TxLib enforces.  For
+  this reason some of the specification propositions may need to be
+  decidable/computable.
 
 ## Digital Objects implementation
 
