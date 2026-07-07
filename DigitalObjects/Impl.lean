@@ -67,4 +67,26 @@ def Rel.toProp (r : Rel) (objects : Nat → Object) : Prop :=
   | .objsEq i j => (objects i) = (objects j)
   | .objsNe i j => (objects i) ≠ (objects j)
 
+mutual
+  def Event.toSpec (e : Event) : (Spec.Event Object) :=
+    match e with
+    | .operation op => .operation op
+    -- An index beyond the mapping lists falls back to 0
+    | .subaction a mapping => .subaction a.toSpec (fun i => mapping.getD i 0)
+  termination_by sizeOf e
+
+  def Action.toSpec (a : Action) : (Spec.Action Object) :=
+    { relations := a.relations.map Rel.toProp
+      events := a.events.map Event.toSpec }
+  termination_by sizeOf a
+  decreasing_by
+    rename_i h
+    have := List.sizeOf_lt_of_mem h
+    cases a; simp_all; omega
+end
+
+def ObjectType.toSpec (t : ObjectType) : (Spec.ObjectType Object) :=
+  { actions := t.actions.map Action.toSpec }
+
+
 end Impl
