@@ -1,5 +1,7 @@
 import Mathlib.Data.Set.Basic
 
+namespace Spec
+
 -- Type: Observable effect on the system state
 inductive Effect (Object : Type) where
   | create (o : Object)
@@ -18,6 +20,7 @@ inductive Op (α : Type) where
   | insert (x : α)
   | delete (x : α)
   | mutate (from_ to_ : α)
+  deriving DecidableEq
 
 abbrev SymbolicOp := Op Nat
 abbrev ConcreteOp {Object : Type} := Op Object
@@ -241,3 +244,5 @@ theorem genesis_empty {Object : Type} {o : Object} :
 -- * There's no way to delete an object except by running an action that consumes it defined by its type
 -- * There's no way to create an object except by running an action that creates it defined by its type
 -- * There's no way to mutate an object except by running an action that mutates it defined by its type
+
+end Spec
