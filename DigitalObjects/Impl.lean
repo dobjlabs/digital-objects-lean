@@ -10,15 +10,48 @@ inductive Rel where
   | objsNe (i : Nat) (j : Nat)
   deriving DecidableEq
 
-inductive Event where
-  | operation (op : Spec.SymbolicOp)
-  | subaction (actionId : Hash) (mapping : List Nat)
-  deriving DecidableEq
+mutual
+  inductive Event where
+    | operation (op : Spec.SymbolicOp)
+    | subaction (a : Action) (mapping : List Nat)
 
-structure Action where
-  relations : List Rel
-  events : List Event
-  deriving DecidableEq
+  structure Action where
+    relations : List Rel
+    events : List Event
+end
+
+-- The automatic derivation of DecidableEq for recursive Event/Action doesn't
+-- go through, so we manually define it here.  This is a very mechanical
+-- process.  DecidableEq carries the equality result and the proof.
+mutual
+  def Event.decEq : (a b : Event) → Decidable (a = b)
+    | .operation x, .operation y => decidable_of_iff (x = y) (by simp)
+    | .operation _, .subaction _ _ => .isFalse nofun
+    | .subaction _ _, .operation _ => .isFalse nofun
+    | .subaction a m, .subaction a' m' =>
+      have := Action.decEq a a'
+      decidable_of_iff (a = a' ∧ m = m') (by simp)
+  termination_by a _ => sizeOf a
+
+  def Event.decEqList : (as bs : List Event) → Decidable (as = bs)
+    | [], [] => .isTrue rfl
+    | [], _ :: _ => .isFalse nofun
+    |  _ :: _, [] => .isFalse nofun
+    | a :: as, b :: bs =>
+      have := Event.decEq a b
+      have := Event.decEqList as bs
+      decidable_of_iff (a = b ∧ as = bs) (by simp)
+  termination_by as _ => sizeOf as
+
+  def Action.decEq : (a b : Action) → Decidable (a = b)
+    | ⟨r1, e1⟩, ⟨r2, e2⟩ =>
+      have := Event.decEqList e1 e2
+      decidable_of_iff (r1 = r2 ∧ e1 = e2) (by simp)
+  termination_by a _ => sizeOf a
+end
+
+instance : DecidableEq Event := Event.decEq
+instance : DecidableEq Action := Action.decEq
 
 structure ObjectType where
   actions : List Action
@@ -26,10 +59,11 @@ structure ObjectType where
 
 structure Object where
   type : ObjectType
-  data: List Nat
+  data : List Nat
   deriving DecidableEq
 
-def Rel.toProp (objects: Nat → Object) : Rel → Prop
+def Rel.toProp (r : Rel) (objects : Nat → Object) : Prop :=
+  match r with
   | .objsEq i j => (objects i) = (objects j)
   | .objsNe i j => (objects i) ≠ (objects j)
 

@@ -150,15 +150,16 @@ def Tx.RelationsHold {Object : Type} (tx : Tx Object) : Prop :=
     (fun a objects => ∀ rel ∈ a.relations, rel objects)
     tx.action tx.objects
 
--- Prop: The tx creates an object at internal index i
-def Tx.CreatesAt {Object : Type} (tx : Tx Object) (o : Object) (i : Nat) : Prop :=
-  let effects := (tx.action.effects tx.objects)
-  effects[i]? = some (Effect.create o)
-
--- Prop: The tx creates an object at internal index i
-def Tx.ConsumesAt {Object : Type} (tx : Tx Object) (o : Object) (i : Nat) : Prop :=
-  let effects := (tx.action.effects tx.objects)
-  effects[i]? = some (Effect.consume o)
+-- NOTE: Unused
+-- -- Prop: The tx creates an object at internal index i
+-- def Tx.CreatesAt {Object : Type} (tx : Tx Object) (o : Object) (i : Nat) : Prop :=
+--   let effects := (tx.action.effects tx.objects)
+--   effects[i]? = some (Effect.create o)
+--
+-- -- Prop: The tx creates an object at internal index i
+-- def Tx.ConsumesAt {Object : Type} (tx : Tx Object) (o : Object) (i : Nat) : Prop :=
+--   let effects := (tx.action.effects tx.objects)
+--   effects[i]? = some (Effect.consume o)
 
 -- Prop: The object has been created in the history
 def InCreated {Object : Type} (o : Object) (h : List (Tx Object)) : Prop :=
