@@ -36,7 +36,7 @@ mutual
   def Event.decEqList : (as bs : List Event) → Decidable (as = bs)
     | [], [] => .isTrue rfl
     | [], _ :: _ => .isFalse nofun
-    |  _ :: _, [] => .isFalse nofun
+    | _ :: _, [] => .isFalse nofun
     | a :: as, b :: bs =>
       have := Event.decEq a b
       have := Event.decEqList as bs
