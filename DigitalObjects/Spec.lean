@@ -183,7 +183,7 @@ structure SystemSpec (Object : Type) [DecidableEq Object] where
   validTx_mutate :
     ∀ h tx, ValidTx h tx →
     ∀ op ∈ (tx.action.concreteOps tx.objects), op.TypePreserving typeOf
-    -- TODO: Maybe we also want to say that the identity is preserved
+    -- NOTE: In a future iteration we may say that the identity is preserved
 
   -- Obligation: A transaction is valid if all the reations in actions and subactions hold
   validTx_relations_hold :

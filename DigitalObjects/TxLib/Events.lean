@@ -1,14 +1,24 @@
 import DigitalObjects.Impl
 
--- TxLib models events as a hashed pair.  For simplicity we use a sum type
+namespace TxLib
+
+-- TxLib models events as a hashed pair.  Because objects are non-empty
+-- dictionaries (they need the "type" key), the three cases of hashed pair are
+-- always distinguishable.  For simplicity we use a sum type
 -- here.
 inductive Event where
   | insert (o : Impl.Object)
   | mutate (from_ to_ : Impl.Object)
   | delete (o : Impl.Object)
+  deriving DecidableEq
 
--- TxLib uses hash chains to roll a sequence of values and then unroll it.  For
--- simplicity we use a list here.
+-- TxLib uses hash chains to roll a sequence of values and then unroll it.
+-- Assuming secure cryptographic hashes and the random oracle model, we can
+-- assume a one to one mapping between a hash chain and a list.  For simplicity
+-- we use a list here.
+
+-- NOTE: Object stable identifier (statements using "stable_identifier") is out
+-- of the scope for now.  We may model it in the future.
 
 -- From digital-objects txlib (podlang code):
 -- // Insert: chain = H(prev, H({}, new)). The `type` arg pins the
@@ -66,3 +76,5 @@ def TxDelete (chain prev_chain : List Event) (old : Impl.Object) (type : Impl.Ob
   old.type = type ∧
   event = .delete old ∧
   chain = event :: prev_chain
+
+end TxLib
