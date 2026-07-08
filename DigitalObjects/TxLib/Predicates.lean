@@ -1,4 +1,14 @@
+-- import Init.Data.List.BasicAux
+import Mathlib.Data.Finset.Basic
+import DigitalObjects.Impl
+
 namespace TxLib
+
+def ArrayContains {α : Type} (array : List α) (index : Nat) (element : α) : Prop :=
+  array[index]? = some element
+
+def SetInsert {α : Type} [DecidableEq α] (set : Finset α) (element : α) (set' : Finset α) : Prop :=
+  element ∉ set ∧ set' = insert element set
 
 -- // ========================================================
 -- // Replay: Helpers
@@ -230,52 +240,110 @@ namespace TxLib
 --   guard(old, before_tx.chain_start, before_tx.chain_end)
 -- )
 
--- // ========================================================
--- // Inputs Grounded
--- // ========================================================
--- //
--- // InputsGrounded proves each input object is a member of `created`, the
--- // global created-object set (every object state ever created, maintained
--- // by the synchronizer).
+mutual
+  -- // ========================================================
+  -- // Inputs Grounded
+  -- // ========================================================
+  -- //
+  -- // InputsGrounded proves each input object is a member of `created`, the
+  -- // global created-object set (every object state ever created, maintained
+  -- // by the synchronizer).
 
--- record StateHeader = (block_number, created, nullifiers, prior_state_history)
+  -- record StateHeader = (block_number, created, nullifiers, prior_state_history)
 
--- InputsGrounded(inputs, created) = OR(
---   // Base case: empty inputs. `created` is intentionally unconstrained --
---   // an empty-input tx grounds nothing.
---   Equal(inputs, {})
---   InputsGroundedSingle(inputs, created)
---   InputsGroundedPair(inputs, created)
---   InputsGroundedRecursive(inputs, created)
--- )
+  -- InputsGrounded(inputs, created) = OR(
+  --   // Base case: empty inputs. `created` is intentionally unconstrained --
+  --   // an empty-input tx grounds nothing.
+  --   Equal(inputs, {})
+  --   InputsGroundedSingle(inputs, created)
+  --   InputsGroundedPair(inputs, created)
+  --   InputsGroundedRecursive(inputs, created)
+  -- )
+  inductive InputsGrounded : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
+    | empty (inputs : Finset Impl.Object) (created : List Impl.Object)
+      (h : inputs = {}) :
+      InputsGrounded inputs created
+    | single (inputs : Finset Impl.Object) (created : List Impl.Object)
+      (h : InputsGroundedSingle inputs created) :
+      InputsGrounded inputs created
+    | pair (inputs : Finset Impl.Object) (created : List Impl.Object)
+      (h : InputsGroundedPair inputs created) :
+      InputsGrounded inputs created
+    | recursive (inputs : Finset Impl.Object) (created : List Impl.Object)
+      (h : InputsGroundedRecursive inputs created) :
+      InputsGrounded inputs created
 
--- // Single-input fast path: avoids the cost of a recursive
--- // InputsGrounded call.
--- InputsGroundedSingle(inputs, created, private: input, index) = AND(
---   ArrayContains(created, index, input)
---   SetInsert({}, input, inputs)
--- )
+  -- // Single-input fast path: avoids the cost of a recursive
+  -- // InputsGrounded call.
+  -- InputsGroundedSingle(inputs, created, private: input, index) = AND(
+  --   ArrayContains(created, index, input)
+  --   SetInsert({}, input, inputs)
+  -- )
+  inductive InputsGroundedSingle : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
+    | mk (inputs : Finset Impl.Object) (created : List Impl.Object)
+      -- private
+      (input : Impl.Object)
+      (index : Nat)
+      -- statements
+      (h1 : ArrayContains created index input)
+      (h2 : SetInsert {} input inputs) :
+      InputsGroundedSingle inputs created
 
--- // Two-input fast path: both inputs grounded inline, no sub-predicate
--- // dispatch.
--- InputsGroundedPair(inputs, created,
---     private: first_input, second_input, set_first, first_index, second_index) = AND(
---   ArrayContains(created, first_index, first_input)
---   SetInsert({}, first_input, set_first)
---   ArrayContains(created, second_index, second_input)
---   SetInsert(set_first, second_input, inputs)
--- )
+  -- // Two-input fast path: both inputs grounded inline, no sub-predicate
+  -- // dispatch.
+  -- InputsGroundedPair(inputs, created,
+  --     private: first_input, second_input, set_first, first_index, second_index) = AND(
+  --   ArrayContains(created, first_index, first_input)
+  --   SetInsert({}, first_input, set_first)
+  --   ArrayContains(created, second_index, second_input)
+  --   SetInsert(set_first, second_input, inputs)
+  -- )
+  inductive InputsGroundedPair : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
+    | mk (inputs : Finset Impl.Object) (created : List Impl.Object)
+      -- private
+      (first_input second_input : Impl.Object)
+      (set_first : Finset Impl.Object)
+      (first_index second_index : Nat)
+      -- statements
+      (h1 : ArrayContains created first_index first_input)
+      (h2 : SetInsert {} first_input set_first)
+      (h3 : ArrayContains created second_index second_input)
+      (h4 : SetInsert set_first second_input inputs) :
+      InputsGroundedPair inputs created
 
--- // 3+ inputs: ground two inputs, then recurse for the rest. The recursion
--- // bottoms out at Single (odd N) or Pair (even N).
--- InputsGroundedRecursive(inputs, created,
---     private: first_input, second_input, mid, prev_inputs, first_index, second_index) = AND(
---   ArrayContains(created, first_index, first_input)
---   SetInsert(prev_inputs, first_input, mid)
---   ArrayContains(created, second_index, second_input)
---   SetInsert(mid, second_input, inputs)
---   InputsGrounded(prev_inputs, created)
--- )
+
+  -- // 3+ inputs: ground two inputs, then recurse for the rest. The recursion
+  -- // bottoms out at Single (odd N) or Pair (even N).
+  -- InputsGroundedRecursive(inputs, created,
+  --     private: first_input, second_input, mid, prev_inputs, first_index, second_index) = AND(
+  --   ArrayContains(created, first_index, first_input)
+  --   SetInsert(prev_inputs, first_input, mid)
+  --   ArrayContains(created, second_index, second_input)
+  --   SetInsert(mid, second_input, inputs)
+  --   InputsGrounded(prev_inputs, created)
+  -- )
+  inductive InputsGroundedRecursive : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
+    | mk (inputs : Finset Impl.Object) (created : List Impl.Object)
+      -- private
+      (first_input second_input : Impl.Object)
+      (mid prev_inputs : Finset Impl.Object)
+      (first_index second_index : Nat)
+      -- statements
+      (h1 : ArrayContains created first_index first_input)
+      (h2 : SetInsert prev_inputs first_input mid)
+      (h3 : ArrayContains created second_index second_input)
+      (h4 : SetInsert mid second_input inputs)
+      (h5 : InputsGrounded prev_inputs created) :
+      InputsGroundedRecursive inputs created
+end
+
+-- Simplified version
+def InputsGrounded' (inputs : Finset Impl.Object) (created : List Impl.Object) : Prop :=
+  ∀ input ∈ inputs, input ∈ created
+
+theorem inputsGrounded_iff_simple (inputs : Finset Impl.Object) (created : List Impl.Object) :
+    InputsGrounded inputs created ↔ InputsGrounded' inputs created := by
+  sorry
 
 -- // ========================================================
 -- // TxFinalized
