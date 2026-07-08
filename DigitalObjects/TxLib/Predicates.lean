@@ -11,6 +11,9 @@ def ArrayContains {α : Type} (array : List α) (index : Nat) (element : α) : P
 def SetInsert {α : Type} [DecidableEq α] (set : Finset α) (element : α) (set' : Finset α) : Prop :=
   element ∉ set ∧ set' = insert element set
 
+def SetDelete {α : Type} [DecidableEq α] (set : Finset α) (element : α) (set' : Finset α) : Prop :=
+  element ∈ set ∧ set' = set.erase element
+
 structure Tx where
   live : Finset Object
   nullifiers : Finset Nullifier
@@ -242,7 +245,7 @@ inductive ReplayMutateEvent : (before_tx after_tx : Tx) → (old new : Object) �
   (new_live live_mid : Finset Object)
   (mid_tx : Tx)
   -- statements
-  -- TODO: (h1 : SetDelete before_tx.live old live_mid)
+  (h1 : SetDelete before_tx.live old live_mid)
   (h2 : SetInsert live_mid new new_live)
   (h3 : mid_tx = {before_tx with live := new_live})
   (h4: ReplyNullify mid_tx after_tx old) :
@@ -258,6 +261,12 @@ inductive ReplayMutateEvent : (before_tx after_tx : Tx) → (old new : Object) �
 --   ReplayMutateEvent(before_tx, after_tx, old, new)
 --   guard(new, before_tx.chain_start, before_tx.chain_end)
 -- )
+-- TODO
+-- inductive ReplayMutate : (mid_tx after_tx : Tx) → (before_chain after_chain : List Event) → Prop where
+--   | mk (mid_tx after_tx : Tx) (before_chain after_chain : List Event)
+--   -- private
+--   (old new : Object)
+--   (guard : )
 
 -- // ========================================================
 -- // Replay: Delete
