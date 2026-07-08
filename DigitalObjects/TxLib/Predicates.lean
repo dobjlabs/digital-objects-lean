@@ -1,4 +1,3 @@
--- import Init.Data.List.BasicAux
 import Mathlib.Data.Finset.Basic
 import DigitalObjects.Impl
 
@@ -311,7 +310,6 @@ mutual
       (h4 : SetInsert set_first second_input inputs) :
       InputsGroundedPair inputs created
 
-
   -- // 3+ inputs: ground two inputs, then recurse for the rest. The recursion
   -- // bottoms out at Single (odd N) or Pair (even N).
   -- InputsGroundedRecursive(inputs, created,
@@ -341,7 +339,7 @@ end
 def InputsGrounded' (inputs : Finset Impl.Object) (created : List Impl.Object) : Prop :=
   ∀ input ∈ inputs, input ∈ created
 
-theorem inputsGrounded_iff_simple (inputs : Finset Impl.Object) (created : List Impl.Object) :
+theorem inputsGrounded_iff_inputsGrounded' (inputs : Finset Impl.Object) (created : List Impl.Object) :
     InputsGrounded inputs created ↔ InputsGrounded' inputs created := by
   sorry
 
