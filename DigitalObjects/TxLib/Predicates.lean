@@ -1,13 +1,21 @@
 import Mathlib.Data.Finset.Basic
 import DigitalObjects.Impl
+import DigitalObjects.TxLib.Events
 
 namespace TxLib
+open Impl (Object Nullifier)
 
 def ArrayContains {α : Type} (array : List α) (index : Nat) (element : α) : Prop :=
   array[index]? = some element
 
 def SetInsert {α : Type} [DecidableEq α] (set : Finset α) (element : α) (set' : Finset α) : Prop :=
   element ∉ set ∧ set' = insert element set
+
+structure Tx where
+  live : Finset Object
+  nullifiers : Finset Nullifier
+  chain_start : List Event
+  chain_end : List Event
 
 -- // ========================================================
 -- // Replay: Helpers
@@ -20,6 +28,11 @@ def SetInsert {α : Type} [DecidableEq α] (set : Finset α) (element : α) (set
 --   Hash(obj, obj.key, obj_key_hash)
 --   Hash(obj_key_hash, "txlib-nullifier-v1", nullifier)
 -- )
+inductive Nullify : (nullifier : Nullifier) → (obj : Object) → Prop where
+  | mk (nullifier : Nullifier) (obj : Object)
+    -- statements
+    (h : nullifier = obj.nullify) :
+    Nullify nullifier obj
 
 -- // ========================================================
 -- // Replay: List Structure
@@ -203,6 +216,16 @@ def SetInsert {α : Type} [DecidableEq α] (set : Finset α) (element : α) (set
 --   SetInsert(mid_tx.nullifiers, nullifier, new_nullifiers)
 --   DictUpdate(mid_tx, "nullifiers", new_nullifiers, after_tx)
 -- )
+inductive ReplyNullify : (mid_tx after_tx : Tx) → (old : Object) → Prop where
+  | mk (mid_tx after_tx : Tx) (old : Object)
+    -- private
+    (nullifier : Nullifier)
+    (new_nullifiers : Finset Nullifier)
+    -- statements
+    (h1 : nullifier = old.nullify)
+    (h2 : SetInsert mid_tx.nullifiers nullifier new_nullifiers)
+    (h3 : after_tx = { mid_tx with nullifiers := new_nullifiers }) :
+    ReplyNullify mid_tx after_tx old
 
 -- // Live-set swap + nullifier accumulation. Chain/event-hash work is
 -- // delegated to TxMutate in the ReplayMutate parent.
@@ -213,6 +236,18 @@ def SetInsert {α : Type} [DecidableEq α] (set : Finset α) (element : α) (set
 --   DictUpdate(before_tx, "live", new_live, mid_tx)
 --   ReplayNullify(mid_tx, after_tx, old)
 -- )
+inductive ReplayMutateEvent : (before_tx after_tx : Tx) → (old new : Object) → Prop where
+  | mk (before_tx after_tx : Tx) (old new : Object)
+  -- private
+  (new_live live_mid : Finset Object)
+  (mid_tx : Tx)
+  -- statements
+  -- TODO: (h1 : SetDelete before_tx.live old live_mid)
+  (h2 : SetInsert live_mid new new_live)
+  (h3 : mid_tx = {before_tx with live := new_live})
+  (h4: ReplyNullify mid_tx after_tx old) :
+  ReplayMutateEvent before_tx after_tx old new
+
 
 -- // Full mutate replay: chain step (via TxMutate) + state update +
 -- // guard dispatch. The guard dispatches on `new` alone because
@@ -258,17 +293,17 @@ mutual
   --   InputsGroundedPair(inputs, created)
   --   InputsGroundedRecursive(inputs, created)
   -- )
-  inductive InputsGrounded : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
-    | empty (inputs : Finset Impl.Object) (created : List Impl.Object)
+  inductive InputsGrounded : (inputs : Finset Object) → (created : List Object) → Prop where
+    | empty (inputs : Finset Object) (created : List Object)
       (h : inputs = {}) :
       InputsGrounded inputs created
-    | single (inputs : Finset Impl.Object) (created : List Impl.Object)
+    | single (inputs : Finset Object) (created : List Object)
       (h : InputsGroundedSingle inputs created) :
       InputsGrounded inputs created
-    | pair (inputs : Finset Impl.Object) (created : List Impl.Object)
+    | pair (inputs : Finset Object) (created : List Object)
       (h : InputsGroundedPair inputs created) :
       InputsGrounded inputs created
-    | recursive (inputs : Finset Impl.Object) (created : List Impl.Object)
+    | recursive (inputs : Finset Object) (created : List Object)
       (h : InputsGroundedRecursive inputs created) :
       InputsGrounded inputs created
 
@@ -278,10 +313,10 @@ mutual
   --   ArrayContains(created, index, input)
   --   SetInsert({}, input, inputs)
   -- )
-  inductive InputsGroundedSingle : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
-    | mk (inputs : Finset Impl.Object) (created : List Impl.Object)
+  inductive InputsGroundedSingle : (inputs : Finset Object) → (created : List Object) → Prop where
+    | mk (inputs : Finset Object) (created : List Object)
       -- private
-      (input : Impl.Object)
+      (input : Object)
       (index : Nat)
       -- statements
       (h1 : ArrayContains created index input)
@@ -297,11 +332,11 @@ mutual
   --   ArrayContains(created, second_index, second_input)
   --   SetInsert(set_first, second_input, inputs)
   -- )
-  inductive InputsGroundedPair : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
-    | mk (inputs : Finset Impl.Object) (created : List Impl.Object)
+  inductive InputsGroundedPair : (inputs : Finset Object) → (created : List Object) → Prop where
+    | mk (inputs : Finset Object) (created : List Object)
       -- private
-      (first_input second_input : Impl.Object)
-      (set_first : Finset Impl.Object)
+      (first_input second_input : Object)
+      (set_first : Finset Object)
       (first_index second_index : Nat)
       -- statements
       (h1 : ArrayContains created first_index first_input)
@@ -320,11 +355,11 @@ mutual
   --   SetInsert(mid, second_input, inputs)
   --   InputsGrounded(prev_inputs, created)
   -- )
-  inductive InputsGroundedRecursive : (inputs : Finset Impl.Object) → (created : List Impl.Object) → Prop where
-    | mk (inputs : Finset Impl.Object) (created : List Impl.Object)
+  inductive InputsGroundedRecursive : (inputs : Finset Object) → (created : List Object) → Prop where
+    | mk (inputs : Finset Object) (created : List Object)
       -- private
-      (first_input second_input : Impl.Object)
-      (mid prev_inputs : Finset Impl.Object)
+      (first_input second_input : Object)
+      (mid prev_inputs : Finset Object)
       (first_index second_index : Nat)
       -- statements
       (h1 : ArrayContains created first_index first_input)
@@ -337,7 +372,7 @@ end
 
 -- Simplified version.  Equivalence proven in
 -- `inputsGrounded_iff_inputsGroundedSimple`
-def InputsGroundedSimple (inputs : Finset Impl.Object) (created : List Impl.Object) : Prop :=
+def InputsGroundedSimple (inputs : Finset Object) (created : List Object) : Prop :=
   ∀ input ∈ inputs, input ∈ created
 
 -- // ========================================================
