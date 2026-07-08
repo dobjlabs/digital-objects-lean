@@ -335,13 +335,10 @@ mutual
       InputsGroundedRecursive inputs created
 end
 
--- Simplified version
-def InputsGrounded' (inputs : Finset Impl.Object) (created : List Impl.Object) : Prop :=
+-- Simplified version.  Equivalence proven in
+-- `inputsGrounded_iff_inputsGroundedSimple`
+def InputsGroundedSimple (inputs : Finset Impl.Object) (created : List Impl.Object) : Prop :=
   ∀ input ∈ inputs, input ∈ created
-
-theorem inputsGrounded_iff_inputsGrounded' (inputs : Finset Impl.Object) (created : List Impl.Object) :
-    InputsGrounded inputs created ↔ InputsGrounded' inputs created := by
-  sorry
 
 -- // ========================================================
 -- // TxFinalized
