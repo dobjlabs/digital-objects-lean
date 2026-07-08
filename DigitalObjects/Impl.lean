@@ -59,8 +59,21 @@ structure ObjectType where
 
 structure Object where
   type : ObjectType
+  key : Nat
   data : List Nat
   deriving DecidableEq
+
+-- There's a 1:1 mapping between nullifier and object state.  The real
+-- implementation of the nullifier is `H(H(obj, obj.key), "txlib-nullifier-v1")`
+-- which is injective modulo collision resistance, and we idealize it as the
+-- identity for simplicity.  Currently we don't cover privacy in this model, so
+-- we skip the property of "derivable only with knowledge of the key".
+structure Nullifier where
+  object : Object
+  deriving DecidableEq
+
+def Object.nullify (o : Object) : Nullifier :=
+  ⟨o⟩
 
 def Rel.toProp (r : Rel) (objects : Nat → Object) : Prop :=
   match r with
