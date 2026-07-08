@@ -7,6 +7,7 @@ import DigitalObjects.TxLib.Predicates
 import DigitalObjects.Impl
 
 namespace TxLib
+open Impl (Object Nullifier)
 
 --
 -- # InputsGrounded ↔ InputsGroundedSimple
@@ -33,17 +34,11 @@ namespace TxLib
 -- - termination_by inputs.card + decreasing_by: two card_erase_of_mem facts
 --   and omega — same recipe as your other termination proofs.
 --
--- Two findings worth noting
---
--- 1. pair is confirmed dead weight in this direction: ofSimple never
---    constructs it — even-cardinality inputs bottom out through recursive → … →
---    empty. So the equivalence also documents that Pair is a pure
---    prover-optimization (it's still needed in toSimple, i.e. its existence
---    doesn't break soundness — which is the actual claim worth having on record).
--- 2. Mathlib name drift bit twice during development, worth remembering for
---    future proofs on this toolchain: it's Finset.notMem_empty/notMem_erase
---    (camelCase notMem, post-rename), and Finset.card needs its own import
---    (Mathlib.Data.Finset.Card) — Finset.Basic doesn't pull it in.
+-- Worth noting: pair is confirmed dead weight in this direction: ofSimple
+-- never constructs it — even-cardinality inputs bottom out through recursive →
+-- … → empty. So the equivalence also documents that Pair is a pure
+-- prover-optimization (it's still needed in toSimple, i.e. its existence
+-- doesn't break soundness — which is the actual claim worth having on record).
 
 -- helper: indexed lookup implies membership
 private theorem mem_of_getElem? {α : Type} {l : List α} {i : Nat} {a : α}
@@ -58,7 +53,7 @@ private theorem mem_getElem? {α : Type} {l : List α} {a : α}
   obtain ⟨i, hlt, rfl⟩ := List.mem_iff_getElem.mp h
   exact ⟨i, by simp [hlt]⟩
 
-theorem InputsGroundedSingle.toSimple {inputs : Finset Impl.Object} {created : List Impl.Object}
+theorem InputsGroundedSingle.toSimple {inputs : Finset Object} {created : List Object}
     (h : InputsGroundedSingle inputs created) : InputsGroundedSimple inputs created := by
   obtain ⟨_, _, input, index, h1, ⟨-, rfl⟩⟩ := h
   intro x hx
@@ -66,7 +61,7 @@ theorem InputsGroundedSingle.toSimple {inputs : Finset Impl.Object} {created : L
   subst hx
   exact mem_of_getElem? h1
 
-theorem InputsGroundedPair.toSimple {inputs : Finset Impl.Object} {created : List Impl.Object}
+theorem InputsGroundedPair.toSimple {inputs : Finset Object} {created : List Object}
     (h : InputsGroundedPair inputs created) : InputsGroundedSimple inputs created := by
   obtain ⟨_, _, first, second, set_first, i, j, h1, ⟨-, rfl⟩, h3, ⟨-, rfl⟩⟩ := h
   intro x hx
@@ -76,7 +71,7 @@ theorem InputsGroundedPair.toSimple {inputs : Finset Impl.Object} {created : Lis
   · exact mem_of_getElem? h1
 
 mutual
-  theorem InputsGrounded.toSimple {inputs : Finset Impl.Object} {created : List Impl.Object}
+  theorem InputsGrounded.toSimple {inputs : Finset Object} {created : List Object}
       (h : InputsGrounded inputs created) : InputsGroundedSimple inputs created :=
     match h with
     | .empty _ _ h => by subst h; intro x hx; simp at hx
@@ -84,7 +79,7 @@ mutual
     | .pair _ _ h => h.toSimple
     | .recursive _ _ h => h.toSimple
 
-  theorem InputsGroundedRecursive.toSimple {inputs : Finset Impl.Object} {created : List Impl.Object}
+  theorem InputsGroundedRecursive.toSimple {inputs : Finset Object} {created : List Object}
       (h : InputsGroundedRecursive inputs created) : InputsGroundedSimple inputs created :=
     match h with
     | .mk _ _ first second mid prev i j h1 h2 h3 h4 h5 => by
@@ -99,7 +94,7 @@ mutual
       · exact ih x hx
 end
 
-theorem InputsGrounded.ofSimple (inputs : Finset Impl.Object) (created : List Impl.Object)
+theorem InputsGrounded.ofSimple (inputs : Finset Object) (created : List Object)
     (h : InputsGroundedSimple inputs created) : InputsGrounded inputs created := by
   obtain hc | hc | hc : inputs.card = 0 ∨ inputs.card = 1 ∨ 1 < inputs.card := by omega
   · exact .empty _ _ (Finset.card_eq_zero.mp hc)
@@ -125,7 +120,7 @@ decreasing_by
     Finset.card_erase_of_mem hab'
   omega
 
-theorem inputsGrounded_iff_inputsGroundedSimple (inputs : Finset Impl.Object) (created : List Impl.Object) :
+theorem inputsGrounded_iff_inputsGroundedSimple (inputs : Finset Object) (created : List Object) :
     InputsGrounded inputs created ↔ InputsGroundedSimple inputs created :=
   ⟨InputsGrounded.toSimple, InputsGrounded.ofSimple inputs created⟩
 
