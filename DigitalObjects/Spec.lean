@@ -15,44 +15,44 @@ def ValidEffects {Object : Type} (created consumed : Set Object) :
   | .create o :: es => o ∉ created ∧ ValidEffects (insert o created) consumed es
   | .consume o :: es => o ∈ created ∧ o ∉ consumed ∧ ValidEffects created (insert o consumed) es
 
--- Type: Operation affecting objects (symbolic or concrete)
-inductive Op (α : Type) where
+-- Type: event affecting objects (symbolic or concrete)
+inductive Event (α : Type) where
   | insert (x : α)
   | delete (x : α)
   | mutate (from_ to_ : α)
   deriving DecidableEq
 
-abbrev SymbolicOp := Op Nat
-abbrev ConcreteOp {Object : Type} := Op Object
+abbrev SymbolicEvent := Event Nat
+abbrev ConcreteEvent {Object : Type} := Event Object
 
--- Fun: Map a symbolic operation to an operation with concrete objects
-def SymbolicOp.map {Object : Type} (objects : Nat → Object) : SymbolicOp → (@ConcreteOp Object)
+-- Fun: Map a symbolic event to an event with concrete objects
+def SymbolicEvent.map {Object : Type} (objects : Nat → Object) : SymbolicEvent → (@ConcreteEvent Object)
   | .insert i => .insert (objects i)
   | .delete i => .delete (objects i)
   | .mutate i j => .mutate (objects i) (objects j)
 
--- Fun: Return the effects of a concrete operation
-def ConcreteOp.toEffects {Object : Type} : @ConcreteOp Object → List (Effect Object)
+-- Fun: Return the effects of a concrete event
+def ConcreteEvent.toEffects {Object : Type} : @ConcreteEvent Object → List (Effect Object)
   | .insert o => [.create o]
   | .delete o => [.consume o]
   | .mutate o₁ o₂ => [.consume o₁, .create o₂]
 
--- Prop: A concrete operation creates or consumes an object
-def ConcreteOp.Touches {Object : Type} : @ConcreteOp Object → Object → Prop
+-- Prop: A concrete event creates or consumes an object
+def ConcreteEvent.Touches {Object : Type} : @ConcreteEvent Object → Object → Prop
   | .insert o', o => o' = o
   | .delete o', o => o' = o
   | .mutate o₁ o₂, o => o₁ = o ∨ o₂ = o
 
 mutual
-  -- Type: A state affecting event within an action
-  inductive Event (Object : Type) where
-    | operation (op : SymbolicOp)
+  -- Type: A state affecting operation within an action
+  inductive Operation (Object : Type) where
+    | event (ev : SymbolicEvent)
     | subaction (a : Action Object) (mapping : Nat → Nat)
 
   -- Type: A collection of object relations and state changes
   structure Action (Object : Type) where
     relations : List ((Nat → Object) → Prop)
-    events : List (Event Object)
+    operations : List (Operation Object)
 end
 
 -- Type: The attempt at applying an action with concrete objects
@@ -65,8 +65,8 @@ structure ObjectType (Object : Type) where
   actions : List (Action Object)
 
 -- Prop: Mutation preserves object type
-def ConcreteOp.TypePreserving {Object : Type}
-  (typeOf : Object → (ObjectType Object)): (@ConcreteOp Object) → Prop
+def ConcreteEvent.TypePreserving {Object : Type}
+  (typeOf : Object → (ObjectType Object)): (@ConcreteEvent Object) → Prop
   | .mutate o₁ o₂ => (typeOf o₁) = (typeOf o₂)
   | _ => True
 
@@ -77,12 +77,12 @@ def reindex {Object : Type}
     Nat → Object :=
   fun i => objects (mapping i)
 
--- Fun: List of concrete operations that happen in an action, ignoring subactions
-def Action.directConcreteOps {Object : Type}
-  (a : Action Object) (objects : Nat → Object) : List (@ConcreteOp Object) :=
-  a.events.filterMap (fun e =>
+-- Fun: List of concrete events that happen in an action, ignoring subactions
+def Action.directConcreteEvents {Object : Type}
+  (a : Action Object) (objects : Nat → Object) : List (@ConcreteEvent Object) :=
+  a.operations.filterMap (fun e =>
     match e with
-    | .operation op => some (op.map objects)
+    | .event ev => some (ev.map objects)
     | .subaction _ _ => none)
 
 -- Prop: All objects touched by this action (ignoring subactions) are touched
@@ -90,25 +90,25 @@ def Action.directConcreteOps {Object : Type}
 def Action.OpsTypeMatch {Object : Type}
   (typeOf : Object → ObjectType Object)
   (a : Action Object) (objects : Nat → Object) : Prop :=
-  ∀ op ∈ a.directConcreteOps objects,
-    ∀ o, op.Touches o → a ∈ (typeOf o).actions
+  ∀ ev ∈ a.directConcreteEvents objects,
+    ∀ o, ev.Touches o → a ∈ (typeOf o).actions
 
 -- NOTE: These mutually recursive function definitions work on mutual recursive
 -- types.  Lean requires a proof of termination so that we can use this
 -- function in propositions.
 mutual
-  -- Fun: List of concrete operations of this event and nested actions
-  def Event.concreteOps {Object : Type}
-    (e : Event Object) (objects : Nat → Object) : List (@ConcreteOp Object) :=
+  -- Fun: List of concrete events of this operation and nested actions
+  def Operation.concreteEvents {Object : Type}
+    (e : Operation Object) (objects : Nat → Object) : List (@ConcreteEvent Object) :=
     match e with
-    | .operation op => [op.map objects]
-    | .subaction a mapping => a.concreteOps (reindex objects mapping)
+    | .event ev => [ev.map objects]
+    | .subaction a mapping => a.concreteEvents (reindex objects mapping)
   termination_by sizeOf e
 
-  -- Fun: List of concrete operations of this action's events and nested actions
-  def Action.concreteOps {Object : Type}
-    (a : Action Object) (objects : Nat → Object) : List (@ConcreteOp Object) :=
-    (a.events.attach.map fun ⟨e, _⟩ => e.concreteOps objects).flatten
+  -- Fun: List of concrete events of this action's operations and nested actions
+  def Action.concreteEvents {Object : Type}
+    (a : Action Object) (objects : Nat → Object) : List (@ConcreteEvent Object) :=
+    (a.operations.attach.map fun ⟨e, _⟩ => e.concreteEvents objects).flatten
   termination_by sizeOf a
   decreasing_by
     rename_i h
@@ -119,20 +119,20 @@ end
 -- Fun: List of effects of an action
 def Action.effects {Object : Type}
   (a : Action Object) (objects : Nat → Object) : List (Effect Object) :=
-  (a.concreteOps objects).flatMap (fun op => op.toEffects)
+  (a.concreteEvents objects).flatMap (fun ev => ev.toEffects)
 
 
 mutual
-  -- Prop: True if P holds at every action and subaction reachable from this event
-  inductive Event.AllSubactions {Object : Type}
+  -- Prop: True if P holds at every action and subaction reachable from this operation
+  inductive Operation.AllSubactions {Object : Type}
       (P : Action Object → (Nat → Object) → Prop) :
-      Event Object → (Nat → Object) → Prop where
-    | operation {objects : Nat → Object} {op : SymbolicOp} :
-        Event.AllSubactions P (Event.operation op) objects
+      Operation Object → (Nat → Object) → Prop where
+    | event {objects : Nat → Object} {ev : SymbolicEvent} :
+        Operation.AllSubactions P (Operation.event ev) objects
     | subaction {objects : Nat → Object}
         (a : Action Object) (mapping : Nat → Nat)
         (h_rec : Action.AllSubactions P a (reindex objects mapping)) :
-        Event.AllSubactions P (Event.subaction a mapping) objects
+        Operation.AllSubactions P (Operation.subaction a mapping) objects
 
   -- Prop: True if P holds at this action and every subaction reachable from it
   inductive Action.AllSubactions {Object : Type}
@@ -140,7 +140,7 @@ mutual
       Action Object → (Nat → Object) → Prop where
     | mk {a : Action Object} {objects : Nat → Object}
         (h_here : P a objects)
-        (h_events : ∀ e ∈ a.events, Event.AllSubactions P e objects) :
+        (h_operations : ∀ e ∈ a.operations, Operation.AllSubactions P e objects) :
         Action.AllSubactions P a objects
 end
 
@@ -179,17 +179,17 @@ structure SystemSpec (Object : Type) [DecidableEq Object] where
     ∀ h tx, ValidTx h tx →
     ValidEffects {o | InCreated o h} {o | InConsumed o h} (tx.action.effects tx.objects)
 
-  -- Obligation: A mutate operation is valid if it preserves the type of the object
+  -- Obligation: A mutate event is valid if it preserves the type of the object
   validTx_mutate :
     ∀ h tx, ValidTx h tx →
-    ∀ op ∈ (tx.action.concreteOps tx.objects), op.TypePreserving typeOf
+    ∀ ev ∈ (tx.action.concreteEvents tx.objects), ev.TypePreserving typeOf
     -- NOTE: In a future iteration we may say that the identity is preserved
 
   -- Obligation: A transaction is valid if all the reations in actions and subactions hold
   validTx_relations_hold :
     ∀ h tx, ValidTx h tx → Tx.RelationsHold tx
 
-  -- Obligation: A transaction is valid if all touched objects are touched via operations
+  -- Obligation: A transaction is valid if all touched objects are touched via events
   -- in actions that belong to their type
   validTx_ops_type_match:
     ∀ h tx, ValidTx h tx →

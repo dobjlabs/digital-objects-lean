@@ -1,3 +1,4 @@
+import Mathlib.Data.Finset.Basic
 import DigitalObjects.Impl
 
 namespace TxLib
@@ -11,6 +12,10 @@ inductive Event where
   | mutate (from_ to_ : Impl.Object)
   | delete (o : Impl.Object)
   deriving DecidableEq
+
+structure Chain where
+  init_live : Finset Impl.Object
+  events : List Event
 
 -- TxLib uses hash chains to roll a sequence of values and then unroll it.
 -- Assuming secure cryptographic hashes and the random oracle model, we can
@@ -37,11 +42,11 @@ inductive Event where
 --   Hash({}, new, event_hash)
 --   Hash(prev_chain, event_hash, chain)
 -- )
-def TxInsert (chain prev_chain : List Event) (new : Impl.Object) (type : Impl.ObjectType) :=
+def TxInsert (chain prev_chain : Chain) (new : Impl.Object) (type : Impl.ObjectType) :=
   ∃ event : Event,
   new.type = type ∧
   event = .insert new ∧
-  chain = event :: prev_chain
+  chain = {prev_chain with events := event :: prev_chain.events}
 
 -- From digital-objects txlib (podlang code):
 -- // Mutate: chain = H(prev, H(old, new)). The shared `type` arg pins
@@ -56,12 +61,12 @@ def TxInsert (chain prev_chain : List Event) (new : Impl.Object) (type : Impl.Ob
 --   Hash(old, new, event_hash)
 --   Hash(prev_chain, event_hash, chain)
 -- )
-def TxMutate (chain prev_chain : List Event) (new old : Impl.Object) (type : Impl.ObjectType) :=
+def TxMutate (chain prev_chain : Chain) (new old : Impl.Object) (type : Impl.ObjectType) :=
   ∃ event : Event,
   new.type = type ∧
   old.type = type ∧
   event = .mutate old new ∧
-  chain = event :: prev_chain
+  chain = {prev_chain with events := event :: prev_chain.events}
 
 -- From digital-objects txlib (podlang code):
 -- // Delete: chain = H(prev, H(old, {})). The `type` arg pins the
@@ -71,10 +76,10 @@ def TxMutate (chain prev_chain : List Event) (new old : Impl.Object) (type : Imp
 --   Hash(old, {}, event_hash)
 --   Hash(prev_chain, event_hash, chain)
 -- )
-def TxDelete (chain prev_chain : List Event) (old : Impl.Object) (type : Impl.ObjectType) :=
+def TxDelete (chain prev_chain : Chain) (old : Impl.Object) (type : Impl.ObjectType) :=
   ∃ event : Event,
   old.type = type ∧
   event = .delete old ∧
-  chain = event :: prev_chain
+  chain = {prev_chain with events := event :: prev_chain.events}
 
 end TxLib

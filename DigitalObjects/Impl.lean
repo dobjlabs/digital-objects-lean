@@ -11,46 +11,46 @@ inductive Rel where
   deriving DecidableEq
 
 mutual
-  inductive Event where
-    | operation (op : Spec.SymbolicOp)
+  inductive Operation where
+    | event (ev : Spec.SymbolicEvent)
     | subaction (a : Action) (mapping : List Nat)
 
   structure Action where
     relations : List Rel
-    events : List Event
+    operations : List Operation
 end
 
--- The automatic derivation of DecidableEq for recursive Event/Action doesn't
+-- The automatic derivation of DecidableEq for recursive Operation/Action doesn't
 -- go through, so we manually define it here.  This is a very mechanical
 -- process.  DecidableEq carries the equality result and the proof.
 mutual
-  def Event.decEq : (a b : Event) → Decidable (a = b)
-    | .operation x, .operation y => decidable_of_iff (x = y) (by simp)
-    | .operation _, .subaction _ _ => .isFalse nofun
-    | .subaction _ _, .operation _ => .isFalse nofun
+  def Operation.decEq : (a b : Operation) → Decidable (a = b)
+    | .event x, .event y => decidable_of_iff (x = y) (by simp)
+    | .event _, .subaction _ _ => .isFalse nofun
+    | .subaction _ _, .event _ => .isFalse nofun
     | .subaction a m, .subaction a' m' =>
       have := Action.decEq a a'
       decidable_of_iff (a = a' ∧ m = m') (by simp)
   termination_by a _ => sizeOf a
 
-  def Event.decEqList : (as bs : List Event) → Decidable (as = bs)
+  def Operation.decEqList : (as bs : List Operation) → Decidable (as = bs)
     | [], [] => .isTrue rfl
     | [], _ :: _ => .isFalse nofun
     | _ :: _, [] => .isFalse nofun
     | a :: as, b :: bs =>
-      have := Event.decEq a b
-      have := Event.decEqList as bs
+      have := Operation.decEq a b
+      have := Operation.decEqList as bs
       decidable_of_iff (a = b ∧ as = bs) (by simp)
   termination_by as _ => sizeOf as
 
   def Action.decEq : (a b : Action) → Decidable (a = b)
     | ⟨r1, e1⟩, ⟨r2, e2⟩ =>
-      have := Event.decEqList e1 e2
+      have := Operation.decEqList e1 e2
       decidable_of_iff (r1 = r2 ∧ e1 = e2) (by simp)
   termination_by a _ => sizeOf a
 end
 
-instance : DecidableEq Event := Event.decEq
+instance : DecidableEq Operation := Operation.decEq
 instance : DecidableEq Action := Action.decEq
 
 structure ObjectType where
@@ -81,16 +81,16 @@ def Rel.toProp (r : Rel) (objects : Nat → Object) : Prop :=
   | .objsNe i j => (objects i) ≠ (objects j)
 
 mutual
-  def Event.toSpec (e : Event) : (Spec.Event Object) :=
-    match e with
-    | .operation op => .operation op
+  def Operation.toSpec (op : Operation) : (Spec.Operation Object) :=
+    match op with
+    | .event ev => .event ev
     -- An index beyond the mapping lists falls back to 0
     | .subaction a mapping => .subaction a.toSpec (fun i => mapping.getD i 0)
-  termination_by sizeOf e
+  termination_by sizeOf op
 
   def Action.toSpec (a : Action) : (Spec.Action Object) :=
     { relations := a.relations.map Rel.toProp
-      events := a.events.map Event.toSpec }
+      operations := a.operations.map Operation.toSpec }
   termination_by sizeOf a
   decreasing_by
     rename_i h
