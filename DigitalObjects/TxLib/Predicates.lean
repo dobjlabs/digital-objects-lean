@@ -162,9 +162,8 @@ mutual
       -- statements
       (h1 : TxInsert after_chain before_chain new guard)
       (h2 : SetInsert before_tx.live new new_live)
-      (h3 : after_tx = {before_tx with live := new_live}) :
-      -- TODO
-      -- (h4 : guard.toSpec )
+      (h3 : after_tx = {before_tx with live := new_live})
+      (h4 : guard.Valid new before_chain after_chain) :
       ReplayActionInsert before_tx after_tx before_chain after_chain
 
   -- // ========================================================
@@ -191,9 +190,8 @@ mutual
       -- statements
       (h1 : TxInsert after_chain before_chain new guard)
       (h2 : SetInsert before_tx.live new new_live)
-      (h3 : after_tx = {before_tx with live := new_live}) :
-      -- TODO
-      -- (h4 : guard.toSpec )
+      (h3 : after_tx = {before_tx with live := new_live})
+      (h4 : guard.Valid new before_tx.chain_start before_tx.chain_end) :
       ReplayInsert before_tx after_tx before_chain after_chain
 
   -- // ========================================================
@@ -259,9 +257,8 @@ mutual
       (guard : Impl.ObjectType)
       -- statements
       (h1 : TxMutate after_chain before_chain new old guard)
-      (h2 : ReplayMutateEvent before_tx after_tx old new) :
-      -- TODO
-      -- (h3 : guard.toSpec )
+      (h2 : ReplayMutateEvent before_tx after_tx old new)
+      (h3 : guard.Valid new before_tx.chain_start before_tx.chain_end) :
       ReplayMutate before_tx after_tx before_chain after_chain
 
   -- // ========================================================
@@ -289,9 +286,8 @@ mutual
       (h1 : TxDelete after_chain before_chain old guard)
       (h2 : SetDelete before_tx.live old new_live)
       (h3 : mid_tx = {before_tx with live := new_live})
-      (h4 : ReplayNullify mid_tx after_tx old) :
-      -- TODO
-      -- (h5 : guard.toSpec )
+      (h4 : ReplayNullify mid_tx after_tx old)
+      (h5 : guard.Valid old before_tx.chain_start before_tx.chain_end) :
       ReplayDelete before_tx after_tx before_chain after_chain
 
   -- // ========================================================
@@ -371,8 +367,7 @@ mutual
       (h1 : TxInsert mid_chain before_chain ins.new guard)
       (h2 : SetInsert before_tx.live ins.new ins.new_live)
       (h3 : mid_tx = {before_tx with live := ins.new_live})
-      -- TODO
-      -- (h4 : guard)
+      (h4 : guard.Valid ins.new before_tx.chain_start before_tx.chain_end)
       (h5 : ReplayContents mid_tx after_tx mid_chain after_chain) :
       ReplayContentsStepInsert before_tx after_tx before_chain after_chain
 
@@ -393,8 +388,7 @@ mutual
       -- statements
       (h1 : TxMutate mid_chain before_chain pair.new pair.old guard)
       (h2 : ReplayMutateEvent before_tx mid_tx pair.old pair.new)
-      -- TODO
-      -- (h3 : guard)
+      (h3 : guard.Valid pair.new before_tx.chain_start before_tx.chain_end)
       (h4 : ReplayContents mid_tx after_tx mid_chain after_chain) :
       ReplayContentsStepMutate before_tx after_tx before_chain after_chain
 
