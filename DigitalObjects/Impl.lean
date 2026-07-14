@@ -126,8 +126,10 @@ structure Chain where
   init_live : Finset Impl.Object
   events : List Event
 
+-- The chain stores events newest first; `delta` is in in chronological order
+-- (oldest first), so it is reversed when prepended onto the chain.
 def ChainDelta (chain_start chain_end : Chain) (delta : List Event) : Prop :=
-  chain_end.events = delta ++ chain_start.events
+  chain_end.events = delta.reverse ++ chain_start.events
 
 def eventsObjects (events : List Event) : List Object :=
   events.flatMap (fun e =>
@@ -150,9 +152,9 @@ mutual
     | (.event ev) :: ops_tail, ev' :: evs_tail =>
       (ev.map objects) = ev' ∧ ValidActionOperations ops_tail evs_tail objects
     | (.subaction a mapping) :: ops_tail, evs =>
-      ∃ evs_tail evs_head, evs_head ++ evs_tail = evs ∧
-        ValidAction a evs_head (Spec.reindex objects mapping) ∧
-        ValidActionOperations ops_tail evs_tail objects
+      ∃ evs_sub evs_rest, evs_sub ++ evs_rest = evs ∧
+        ValidAction a evs_sub (Spec.reindex objects mapping) ∧
+        ValidActionOperations ops_tail evs_rest objects
     | [], [] => True
     | _, _ => False
   termination_by sizeOf ops
