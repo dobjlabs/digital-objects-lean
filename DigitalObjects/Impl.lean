@@ -54,8 +54,13 @@ end
 instance : DecidableEq Operation := Operation.decEq
 instance : DecidableEq Action := Action.decEq
 
+structure ActionBridge where
+  action: Action
+  index: Nat
+  deriving DecidableEq
+
 structure ObjectType where
-  actions : List Action
+  bridges : List ActionBridge
   deriving DecidableEq
 
 structure Object where
@@ -64,8 +69,8 @@ structure Object where
   data : List Nat
   deriving DecidableEq
 
-abbrev ObjectDefault : Object := {
-  type := { actions := [] },
+def NullObject : Object := {
+  type := { bridges := [] },
   key := 0,
   data := [],
 }
@@ -105,8 +110,11 @@ mutual
     cases a; simp_all; omega
 end
 
+def ActionBridge.toSpec (b : ActionBridge) : (Spec.ActionBridge Object) :=
+  {action := b.action.toSpec, index := b.index}
+
 def ObjectType.toSpec (t : ObjectType) : (Spec.ObjectType Object) :=
-  { actions := t.actions.map Action.toSpec }
+  { bridges := t.bridges.map ActionBridge.toSpec }
 
 -- TxLib models events as a hashed pair.  Because objects are non-empty
 -- dictionaries (they need the "type" key), the three cases of hashed pair are
@@ -131,26 +139,31 @@ def eventsObjects (events : List Event) : List Object :=
 
 mutual
   def ValidAction (a : Spec.Action Object) (evs : List Event) (objects : Nat → Object) : Prop :=
-    ∀ r ∈ a.relations, r objects ∧
+    (∀ r ∈ a.relations, r objects) ∧
     ValidActionOperations a.operations evs objects
+  termination_by sizeOf a
+  decreasing_by cases a; simp; omega
 
-  def ValidActionOperations (ops : List (Spec.Operation Object)) (evs : List Event) (objects : Nat → Object) : Prop :=
+  def ValidActionOperations (ops : List (Spec.Operation Object)) (evs : List Event)
+      (objects : Nat → Object) : Prop :=
     match ops, evs with
     | (.event ev) :: ops_tail, ev' :: evs_tail =>
       (ev.map objects) = ev' ∧ ValidActionOperations ops_tail evs_tail objects
     | (.subaction a mapping) :: ops_tail, evs =>
       ∃ evs_tail evs_head, evs_head ++ evs_tail = evs ∧
-      ValidAction a evs_head (Spec.reindex objects mapping) ∧ ValidActionOperations ops_tail evs_tail objects
+        ValidAction a evs_head (Spec.reindex objects mapping) ∧
+        ValidActionOperations ops_tail evs_tail objects
     | [], [] => True
     | _, _ => False
+  termination_by sizeOf ops
 
 end
 
 def ObjectType.Valid (t : ObjectType) (o : Object) (chain_start chain_end : Chain) : Prop :=
   ∃ events, ChainDelta chain_start chain_end events ∧
-  let objects := (fun i => (eventsObjects events).getD i ObjectDefault)
-  ∃ a ∈ t.toSpec.actions,
-    ∀ r ∈ a.relations, r objects ∧
-    ValidActionOperations a.operations events objects
+  let objects := (fun i => (eventsObjects events).getD i NullObject)
+  ∃ b ∈ t.toSpec.bridges,
+    ValidAction b.action events objects ∧
+    objects b.index = o
 
 end Impl

@@ -60,9 +60,15 @@ structure Tx (Object : Type) where
   action : Action Object
   objects : Nat → Object
 
+-- Type: Bridge an action with a particular object it directly touches
+-- identified by index
+structure ActionBridge (Object : Type) where
+  action: Action Object
+  index: Nat
+
 -- Type: The set of valid actions of an object
 structure ObjectType (Object : Type) where
-  actions : List (Action Object)
+  bridges : List (ActionBridge Object)
 
 -- Prop: Mutation preserves object type
 def ConcreteEvent.TypePreserving {Object : Type}
@@ -85,13 +91,24 @@ def Action.directConcreteEvents {Object : Type}
     | .event ev => some (ev.map objects)
     | .subaction _ _ => none)
 
+-- Fun: List of objects that an action directly touhces, ignoring subactions
+def Action.directEventsObjects {Object : Type}
+  (a : Action Object) (objects : Nat → Object) : List Object :=
+  a.operations.flatMap (fun e =>
+    match e with
+    | .event ev => (match (ev.map objects) with
+      | .insert o => [o]
+      | .mutate from_ to_ => [from_, to_]
+      | .delete o => [o])
+    | .subaction _ _ => [])
+
 -- Prop: All objects touched by this action (ignoring subactions) are touched
--- by an action in the object's type
+-- by an action in the object's type with a valid bridge index
 def Action.OpsTypeMatch {Object : Type}
   (typeOf : Object → ObjectType Object)
   (a : Action Object) (objects : Nat → Object) : Prop :=
-  ∀ ev ∈ a.directConcreteEvents objects,
-    ∀ o, ev.Touches o → a ∈ (typeOf o).actions
+  ∀ (i : Nat) (o : Object), (a.directEventsObjects objects)[i]? = some o →
+    ∃ b ∈ (typeOf o).bridges, a = b.action ∧ i = b.index
 
 -- NOTE: These mutually recursive function definitions work on mutual recursive
 -- types.  Lean requires a proof of termination so that we can use this
