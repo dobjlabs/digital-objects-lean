@@ -1,3 +1,4 @@
+import Mathlib.Data.Finset.Basic
 import DigitalObjects.Spec
 
 namespace Impl
@@ -63,6 +64,12 @@ structure Object where
   data : List Nat
   deriving DecidableEq
 
+abbrev ObjectDefault : Object := {
+  type := { actions := [] },
+  key := 0,
+  data := [],
+}
+
 -- There's a 1:1 mapping between nullifier and object state.  The real
 -- implementation of the nullifier is `H(H(obj, obj.key), "txlib-nullifier-v1")`
 -- which is injective modulo collision resistance, and we idealize it as the
@@ -101,5 +108,49 @@ end
 def ObjectType.toSpec (t : ObjectType) : (Spec.ObjectType Object) :=
   { actions := t.actions.map Action.toSpec }
 
+-- TxLib models events as a hashed pair.  Because objects are non-empty
+-- dictionaries (they need the "type" key), the three cases of hashed pair are
+-- always distinguishable.  For simplicity we use a sum type
+-- here.
+abbrev Event := Spec.Event Object
+
+structure Chain where
+  init_live : Finset Impl.Object
+  events : List Event
+
+def ChainDelta (chain_start chain_end : Chain) (delta : List Event) : Prop :=
+  chain_end.events = delta ++ chain_start.events
+
+def eventsObjects (events : List Event) : List Object :=
+  events.flatMap (fun e =>
+    match e with
+    | .insert o => [o]
+    | .mutate from_ to_ => [from_, to_]
+    | .delete o => [o]
+  )
+
+mutual
+  def ValidAction (a : Spec.Action Object) (evs : List Event) (objects : Nat → Object) : Prop :=
+    ∀ r ∈ a.relations, r objects ∧
+    ValidActionOperations a.operations evs objects
+
+  def ValidActionOperations (ops : List (Spec.Operation Object)) (evs : List Event) (objects : Nat → Object) : Prop :=
+    match ops, evs with
+    | (.event ev) :: ops_tail, ev' :: evs_tail =>
+      (ev.map objects) = ev' ∧ ValidActionOperations ops_tail evs_tail objects
+    | (.subaction a mapping) :: ops_tail, evs =>
+      ∃ evs_tail evs_head, evs_head ++ evs_tail = evs ∧
+      ValidAction a evs_head (Spec.reindex objects mapping) ∧ ValidActionOperations ops_tail evs_tail objects
+    | [], [] => True
+    | _, _ => False
+
+end
+
+def ObjectType.Valid (t : ObjectType) (o : Object) (chain_start chain_end : Chain) : Prop :=
+  ∃ events, ChainDelta chain_start chain_end events ∧
+  let objects := (fun i => (eventsObjects events).getD i ObjectDefault)
+  ∃ a ∈ t.toSpec.actions,
+    ∀ r ∈ a.relations, r objects ∧
+    ValidActionOperations a.operations events objects
 
 end Impl

@@ -1,21 +1,7 @@
-import Mathlib.Data.Finset.Basic
 import DigitalObjects.Impl
 
 namespace TxLib
-
--- TxLib models events as a hashed pair.  Because objects are non-empty
--- dictionaries (they need the "type" key), the three cases of hashed pair are
--- always distinguishable.  For simplicity we use a sum type
--- here.
-inductive Event where
-  | insert (o : Impl.Object)
-  | mutate (from_ to_ : Impl.Object)
-  | delete (o : Impl.Object)
-  deriving DecidableEq
-
-structure Chain where
-  init_live : Finset Impl.Object
-  events : List Event
+open Impl (Object Chain Event)
 
 -- TxLib uses hash chains to roll a sequence of values and then unroll it.
 -- Assuming secure cryptographic hashes and the random oracle model, we can
