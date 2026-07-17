@@ -55,8 +55,8 @@ instance : DecidableEq Operation := Operation.decEq
 instance : DecidableEq Action := Action.decEq
 
 structure ActionBridge where
-  action: Action
-  index: Nat
+  action : Action
+  index : Nat
   deriving DecidableEq
 
 structure ObjectType where
@@ -122,11 +122,14 @@ def ObjectType.toSpec (t : ObjectType) : (Spec.ObjectType Object) :=
 -- here.
 abbrev Event := Spec.Event Object
 
+-- The implementation commits to the initial live set when creating the chain,
+-- but no further checks are performed.  Here we model this commitment as just
+-- including the value in the Chain structure.
 structure Chain where
   init_live : Finset Impl.Object
   events : List Event
 
--- The chain stores events newest first; `delta` is in in chronological order
+-- The chain stores events newest first; `delta` is in chronological order
 -- (oldest first), so it is reversed when prepended onto the chain.
 def ChainDelta (chain_start chain_end : Chain) (delta : List Event) : Prop :=
   chain_end.events = delta.reverse ++ chain_start.events
@@ -161,6 +164,10 @@ mutual
 
 end
 
+-- Pred: validate a type guard against an object for a particular chain of
+-- events.  This predicate intentionally doesn't verify that that `o.type = t`
+-- because this is a model of the following podlang statement template:
+-- `guard(new, chain_start, chain_end)`
 def ObjectType.Valid (t : ObjectType) (o : Object) (chain_start chain_end : Chain) : Prop :=
   ∃ events, ChainDelta chain_start chain_end events ∧
   let objects := (fun i => (eventsObjects events).getD i NullObject)

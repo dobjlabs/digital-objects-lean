@@ -63,8 +63,8 @@ structure Tx (Object : Type) where
 -- Type: Bridge an action with a particular object it directly touches
 -- identified by index
 structure ActionBridge (Object : Type) where
-  action: Action Object
-  index: Nat
+  action : Action Object
+  index : Nat
 
 -- Type: The set of valid actions of an object
 structure ObjectType (Object : Type) where
