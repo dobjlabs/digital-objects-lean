@@ -25,14 +25,17 @@ structure StateHeader where
   created : List Object
   nullifiers : Finset Nullifier
   prior_state_history : List StateHeader
+  deriving DecidableEq
 
 -- Auxiliary types
 structure Ins where
   new : Object
   new_live : Finset Object
+  deriving DecidableEq
 structure Pair where
   old : Object
   new : Object
+  deriving DecidableEq
 
 -- // ========================================================
 -- // Replay: Helpers
@@ -577,13 +580,12 @@ def InputsGroundedSimple (inputs : Finset Object) (created : List Object) : Prop
 --   DictContains(tx_final, "nullifiers", nullifiers)
 --   DictContains(tx_final, "live", live)
 -- )
-inductive TxFinalBindings : (tx_final : Tx) → (nullifiers : Set Nullifier) → (live : Finset Object) → Prop where
-  | mk (tx_final : Tx) (nullifiers : Set Nullifier) (live : Finset Object)
+inductive TxFinalBindings : (tx_final : Tx) → (nullifiers : Finset Nullifier) → (live : Finset Object) → Prop where
+  | mk (tx_final : Tx) (nullifiers : Finset Nullifier) (live : Finset Object)
     -- statements
     (h1 : nullifiers = tx_final.nullifiers)
     (h2 : live = tx_final.live) :
     TxFinalBindings tx_final nullifiers live
-
 
 -- TxFinalized(state_header StateHeader, tx_final, nullifiers, live,
 --      private: before_tx, chain_start, chain_final) = AND(
@@ -593,15 +595,15 @@ inductive TxFinalBindings : (tx_final : Tx) → (nullifiers : Set Nullifier) →
 --   TxFinalBindings(tx_final, nullifiers, live)
 --   ReplayActions(before_tx, tx_final, chain_start, chain_final)
 -- )
-inductive TxFinalized : (state_header : StateHeader) → (tx_final : Tx) → (nullifiers : Set Nullifier) → (live : Finset Object) → Prop where
-  | mk (state_header : StateHeader) (tx_final : Tx) (nullifiers : Set Nullifier) (live : Finset Object)
+inductive TxFinalized : (state_header : StateHeader) → (tx_final : Tx) → (nullifiers : Finset Nullifier) → (live : Finset Object) → Prop where
+  | mk (state_header : StateHeader) (tx_final : Tx) (nullifiers : Finset Nullifier) (live : Finset Object)
     -- private
     (before_tx : Tx)
     (chain_start chain_final : Chain)
     -- statements
     (h1 : InputsGrounded before_tx.live state_header.created)
     (h2 : chain_start = {init_live := before_tx.live, events := []})
-    (h3 : before_tx = {nullifiers := ∅, chain_start := {init_live := ∅, events := []}, chain_end := {init_live := ∅, events := []}, live := before_tx.live})
+    (h3 : before_tx = {live := before_tx.live, nullifiers := ∅, chain_start := {init_live := ∅, events := []}, chain_end := {init_live := ∅, events := []}})
     (h4 : TxFinalBindings tx_final nullifiers live)
     (h5 : ReplayActions before_tx tx_final chain_start chain_final) :
     TxFinalized state_header tx_final nullifiers live

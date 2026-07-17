@@ -83,14 +83,6 @@ def reindex {Object : Type}
     Nat → Object :=
   fun i => objects (mapping i)
 
--- -- Fun: List of concrete events that happen in an action, ignoring subactions
--- def Action.directConcreteEvents {Object : Type}
---   (a : Action Object) (objects : Nat → Object) : List (@ConcreteEvent Object) :=
---   a.operations.filterMap (fun e =>
---     match e with
---     | .event ev => some (ev.map objects)
---     | .subaction _ _ => none)
-
 -- Fun: List of objects that an action directly touches, ignoring subactions
 def Action.localObjects {Object : Type}
   (a : Action Object) (objects : Nat → Object) : List Object :=

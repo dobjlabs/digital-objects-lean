@@ -164,8 +164,8 @@ mutual
 
 end
 
--- Pred: validate a type guard against an object for a particular chain of
--- events.  This predicate intentionally doesn't verify that that `o.type = t`
+-- Prop: validate a type guard against an object for a particular chain of
+-- events.  This predicate intentionally doesn't verify that `o.type = t`
 -- because this is a model of the following podlang statement template:
 -- `guard(new, chain_start, chain_end)`
 def ObjectType.Valid (t : ObjectType) (o : Object) (chain_start chain_end : Chain) : Prop :=
