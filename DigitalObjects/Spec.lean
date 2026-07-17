@@ -83,16 +83,16 @@ def reindex {Object : Type}
     Nat → Object :=
   fun i => objects (mapping i)
 
--- Fun: List of concrete events that happen in an action, ignoring subactions
-def Action.directConcreteEvents {Object : Type}
-  (a : Action Object) (objects : Nat → Object) : List (@ConcreteEvent Object) :=
-  a.operations.filterMap (fun e =>
-    match e with
-    | .event ev => some (ev.map objects)
-    | .subaction _ _ => none)
+-- -- Fun: List of concrete events that happen in an action, ignoring subactions
+-- def Action.directConcreteEvents {Object : Type}
+--   (a : Action Object) (objects : Nat → Object) : List (@ConcreteEvent Object) :=
+--   a.operations.filterMap (fun e =>
+--     match e with
+--     | .event ev => some (ev.map objects)
+--     | .subaction _ _ => none)
 
--- Fun: List of objects that an action directly touhces, ignoring subactions
-def Action.directEventsObjects {Object : Type}
+-- Fun: List of objects that an action directly touches, ignoring subactions
+def Action.localObjects {Object : Type}
   (a : Action Object) (objects : Nat → Object) : List Object :=
   a.operations.flatMap (fun e =>
     match e with
@@ -107,7 +107,7 @@ def Action.directEventsObjects {Object : Type}
 def Action.OpsTypeMatch {Object : Type}
   (typeOf : Object → ObjectType Object)
   (a : Action Object) (objects : Nat → Object) : Prop :=
-  ∀ (i : Nat) (o : Object), (a.directEventsObjects objects)[i]? = some o →
+  ∀ (i : Nat) (o : Object), (a.localObjects objects)[i]? = some o →
     ∃ b ∈ (typeOf o).bridges, a = b.action ∧ i = b.index
 
 -- NOTE: These mutually recursive function definitions work on mutual recursive

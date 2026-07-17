@@ -166,6 +166,6 @@ def ObjectType.Valid (t : ObjectType) (o : Object) (chain_start chain_end : Chai
   let objects := (fun i => (eventsObjects events).getD i NullObject)
   ∃ b ∈ t.toSpec.bridges,
     ValidAction b.action events objects ∧
-    objects b.index = o
+    (b.action.localObjects objects)[b.index]? = some o
 
 end Impl
