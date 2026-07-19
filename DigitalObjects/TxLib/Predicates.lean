@@ -25,17 +25,37 @@ structure StateHeader where
   created : List Object
   nullifiers : Finset Nullifier
   prior_state_history : List StateHeader
-  deriving DecidableEq
+
+-- The automatic derivation of DecidableEq doesn't support the nested
+-- recursion through `List StateHeader`, so we define it manually (same
+-- pattern as `Impl.Event`/`Impl.Action`).
+mutual
+  def StateHeader.decEq : (a b : StateHeader) → Decidable (a = b)
+    | ⟨n1, c1, nf1, ph1⟩, ⟨n2, c2, nf2, ph2⟩ =>
+      have := StateHeader.decEqList ph1 ph2
+      decidable_of_iff (n1 = n2 ∧ c1 = c2 ∧ nf1 = nf2 ∧ ph1 = ph2) (by simp)
+  termination_by a _ => sizeOf a
+
+  def StateHeader.decEqList : (as bs : List StateHeader) → Decidable (as = bs)
+    | [], [] => .isTrue rfl
+    | [], _ :: _ => .isFalse nofun
+    | _ :: _, [] => .isFalse nofun
+    | a :: as, b :: bs =>
+      have := StateHeader.decEq a b
+      have := StateHeader.decEqList as bs
+      decidable_of_iff (a = b ∧ as = bs) (by simp)
+  termination_by as _ => sizeOf as
+end
+
+instance : DecidableEq StateHeader := StateHeader.decEq
 
 -- Auxiliary types
 structure Ins where
   new : Object
   new_live : Finset Object
-  deriving DecidableEq
 structure Pair where
   old : Object
   new : Object
-  deriving DecidableEq
 
 -- // ========================================================
 -- // Replay: Helpers
