@@ -7,7 +7,7 @@ import DigitalObjects.TxLib.Predicates
 import DigitalObjects.Impl
 
 namespace TxLib
-open Impl (Object Nullifier)
+open Impl (Object Nullifier Chain)
 
 --
 -- # InputsGrounded ↔ InputsGroundedSimple
@@ -123,5 +123,10 @@ decreasing_by
 theorem inputsGrounded_iff_inputsGroundedSimple (inputs : Finset Object) (created : List Object) :
     InputsGrounded inputs created ↔ InputsGroundedSimple inputs created :=
   ⟨InputsGrounded.toSimple, InputsGrounded.ofSimple inputs created⟩
+
+theorem replayActions_iff_replayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+    ReplayActions before_tx after_tx before_chain after_chain ↔
+      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
+    by sorry
 
 end TxLib

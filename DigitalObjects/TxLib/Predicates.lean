@@ -1,4 +1,5 @@
 import Mathlib.Data.Finset.Basic
+import Mathlib.Logic.Relation
 import DigitalObjects.Impl
 import DigitalObjects.TxLib.Events
 
@@ -467,6 +468,11 @@ mutual
       (h : ReplayAction before_tx after_tx before_chain after_chain) :
       ReplayElement before_tx after_tx before_chain after_chain
 end
+
+-- Prop: one-or-more ReplayAction steps chained through intermediate (tx, chain) states.
+def ReplayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) : Prop :=
+  Relation.TransGen (fun before after : Tx × Chain => ReplayAction before.1 after.1 before.2 after.2)
+    (before_tx, before_chain) (after_tx, after_chain)
 
 mutual
   -- // ========================================================
