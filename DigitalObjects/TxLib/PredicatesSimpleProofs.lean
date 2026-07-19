@@ -1,5 +1,5 @@
 -- Simplified predicates with equivalence proofs.
--- The content of this file is mostly LLM generated
+-- The content of this file is mostly LLM generated, including comments
 
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Card
@@ -124,9 +124,79 @@ theorem inputsGrounded_iff_inputsGroundedSimple (inputs : Finset Object) (create
     InputsGrounded inputs created ↔ InputsGroundedSimple inputs created :=
   ⟨InputsGrounded.toSimple, InputsGrounded.ofSimple inputs created⟩
 
+--
+-- # ReplayActions ↔ ReplayActionsSimple
+--
+-- How it works
+--
+-- ReplayActionInsert.toReplayAction — the heart of the proof. It builds the
+-- 5-statement long derivation from the 2-statement fast path, supplying
+-- ReplayAction's four private Txs explicitly (scope_mid, inner_tx, end_tx, mid
+-- as concrete {before_tx with …} updates). Everything then discharges by rfl
+-- or by reusing the fast path's own hypotheses unchanged — most notably h4 :
+-- guard.Valid new before_chain after_chain is accepted where ReplayInsert
+-- demands guard.Valid new inner_tx.chain_start inner_tx.chain_end, because
+-- after the two structure updates those projections reduce definitionally to
+-- before_chain/after_chain. That defeq is precisely the podlang comment's
+-- claim ("the public args ARE the action's chain scope") — the model validates
+-- it, no rewriting needed. Same for the final h3: the long path's after_tx =
+-- {mid with nullifiers := end_tx.nullifiers} reduces to the fast path's
+-- after_tx = {before_tx with live := new_live}.
+--
+-- toSimple — the mutual pair mirrors which predicates are actually mutually
+-- recursive (ReplayActions ↔ ReplayActionsStep), same pattern as the
+-- InputsGrounded proofs: action → TransGen.single, actions_step →
+-- TransGen.head, and action_insert → TransGen.single via the fast-path lemma.
+--
+-- ofSimple — stated over pairs p q : Tx × Chain so the TransGen motive is
+-- directly usable, then head_induction_on peels one ReplayAction at a time
+-- into action/actions_step constructors. The final iff applies it at literal
+-- pairs, where p.1/p.2 reduce, so no repackaging lemma is needed.
+
+-- Soundness of the K=1 fast path: everything ReplayActionInsert proves, the
+-- long path (ReplayAction → ReplayContents → ReplayElement → ReplayInsert)
+-- proves as well.  This discharges the claim made in the podlang comment:
+-- the guard sees the same chain bounds either way.
+theorem ReplayActionInsert.toReplayAction
+    {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+    (h : ReplayActionInsert before_tx after_tx before_chain after_chain) :
+    ReplayAction before_tx after_tx before_chain after_chain := by
+  obtain ⟨_, _, _, _, new, new_live, guard, h1, h2, h3, h4⟩ := h
+  exact .mk _ _ _ _
+    {before_tx with chain_start := before_chain}
+    {before_tx with chain_start := before_chain, chain_end := after_chain}
+    {before_tx with chain_start := before_chain, chain_end := after_chain, live := new_live}
+    {before_tx with live := new_live}
+    rfl rfl
+    (.element _ _ _ _ (.insert _ _ _ _ (.mk _ _ _ _ new new_live guard h1 h2 rfl h4)))
+    rfl h3
+
+mutual
+  theorem ReplayActions.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayActions before_tx after_tx before_chain after_chain) :
+      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .action _ _ _ _ h => Relation.TransGen.single h
+    | .actions_step _ _ _ _ h => h.toSimple
+    | .action_insert _ _ _ _ h => Relation.TransGen.single h.toReplayAction
+
+  theorem ReplayActionsStep.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayActionsStep before_tx after_tx before_chain after_chain) :
+      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ h1 h2 => Relation.TransGen.head h1 h2.toSimple
+end
+
+theorem ReplayActions.ofSimple {p q : Tx × Chain}
+    (h : Relation.TransGen (fun before after : Tx × Chain => ReplayAction before.1 after.1 before.2 after.2) p q) :
+    ReplayActions p.1 q.1 p.2 q.2 := by
+  induction h using Relation.TransGen.head_induction_on with
+  | single h => exact .action _ _ _ _ h
+  | head h1 _ ih => exact .actions_step _ _ _ _ (.mk _ _ _ _ _ _ h1 ih)
+
 theorem replayActions_iff_replayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
     ReplayActions before_tx after_tx before_chain after_chain ↔
       ReplayActionsSimple before_tx after_tx before_chain after_chain :=
-    by sorry
+  ⟨ReplayActions.toSimple, ReplayActions.ofSimple⟩
 
 end TxLib
