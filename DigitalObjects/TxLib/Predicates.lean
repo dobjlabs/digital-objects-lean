@@ -469,15 +469,6 @@ mutual
       ReplayElement before_tx after_tx before_chain after_chain
 end
 
--- Prop: one-or-more ReplayAction steps chained through intermediate (tx, chain) states.
-def ReplayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) : Prop :=
-  Relation.TransGen (fun before after : Tx × Chain => ReplayAction before.1 after.1 before.2 after.2)
-    (before_tx, before_chain) (after_tx, after_chain)
-
--- Prop: one-or-more ReplayElement steps chained through intermediate (tx, chain) states.
-def ReplayContentsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) : Prop :=
-  Relation.TransGen (fun before after : Tx × Chain => ReplayElement before.1 after.1 before.2 after.2)
-    (before_tx, before_chain) (after_tx, after_chain)
 
 mutual
   -- // ========================================================
@@ -574,11 +565,6 @@ mutual
       (h5 : InputsGrounded prev_inputs created) :
       InputsGroundedRecursive inputs created
 end
-
--- Simplified version.  Equivalence proven in
--- `inputsGrounded_iff_inputsGroundedSimple`
-def InputsGroundedSimple (inputs : Finset Object) (created : List Object) : Prop :=
-  ∀ input ∈ inputs, input ∈ created
 
 -- // ========================================================
 -- // TxFinalized

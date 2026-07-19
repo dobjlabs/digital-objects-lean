@@ -4,17 +4,22 @@
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Card
 import DigitalObjects.TxLib.Predicates
+import DigitalObjects.TxLib.PredicatesSimple
 import DigitalObjects.Impl
 
 namespace TxLib
 open Impl (Object Nullifier Chain)
 
 --
--- # InputsGrounded ↔ InputsGroundedSimple
+-- Stage 0
+--
+
+--
+-- # InputsGrounded ↔ InputsGroundedSimple0
 --
 -- How it's structured
 --
--- Faithful → simple (toSimple family): structural recursion on the derivation.
+-- Faithful → simple (toSimple0 family): structural recursion on the derivation.
 -- Single/Pair aren't recursive, so they're standalone theorems before the
 -- mutual block — only InputsGrounded ↔ InputsGroundedRecursive need mutual
 -- recursion (mirroring which podlang predicates actually recurse). The obtain
@@ -22,7 +27,7 @@ open Impl (Object Nullifier Chain)
 -- body, substituting the set equations; then simp turns x ∈ insert … (insert …
 -- ∅) into the disjunction of cases.
 --
--- Simple → faithful (ofSimple): well-founded recursion on inputs.card with the
+-- Simple0 → faithful (ofSimple0): well-founded recursion on inputs.card with the
 -- three-way split card = 0 / = 1 / > 1:
 -- - 0 → empty; 1 → single (Finset.card_eq_one gives inputs = {x}).
 -- - > 1 → Finset.one_lt_card yields distinct a ≠ b, both members; prev :=
@@ -34,10 +39,10 @@ open Impl (Object Nullifier Chain)
 -- - termination_by inputs.card + decreasing_by: two card_erase_of_mem facts
 --   and omega — same recipe as your other termination proofs.
 --
--- Worth noting: pair is confirmed dead weight in this direction: ofSimple
+-- Worth noting: pair is confirmed dead weight in this direction: ofSimple0
 -- never constructs it — even-cardinality inputs bottom out through recursive →
 -- … → empty. So the equivalence also documents that Pair is a pure
--- prover-optimization (it's still needed in toSimple, i.e. its existence
+-- prover-optimization (it's still needed in toSimple0, i.e. its existence
 -- doesn't break soundness — which is the actual claim worth having on record).
 
 -- helper: indexed lookup implies membership
@@ -53,16 +58,16 @@ private theorem mem_getElem? {α : Type} {l : List α} {a : α}
   obtain ⟨i, hlt, rfl⟩ := List.mem_iff_getElem.mp h
   exact ⟨i, by simp [hlt]⟩
 
-theorem InputsGroundedSingle.toSimple {inputs : Finset Object} {created : List Object}
-    (h : InputsGroundedSingle inputs created) : InputsGroundedSimple inputs created := by
+theorem InputsGroundedSingle.toSimple0 {inputs : Finset Object} {created : List Object}
+    (h : InputsGroundedSingle inputs created) : InputsGroundedSimple0 inputs created := by
   obtain ⟨_, _, input, index, h1, ⟨-, rfl⟩⟩ := h
   intro x hx
   simp at hx
   subst hx
   exact mem_of_getElem? h1
 
-theorem InputsGroundedPair.toSimple {inputs : Finset Object} {created : List Object}
-    (h : InputsGroundedPair inputs created) : InputsGroundedSimple inputs created := by
+theorem InputsGroundedPair.toSimple0 {inputs : Finset Object} {created : List Object}
+    (h : InputsGroundedPair inputs created) : InputsGroundedSimple0 inputs created := by
   obtain ⟨_, _, first, second, set_first, i, j, h1, ⟨-, rfl⟩, h3, ⟨-, rfl⟩⟩ := h
   intro x hx
   simp at hx
@@ -71,21 +76,21 @@ theorem InputsGroundedPair.toSimple {inputs : Finset Object} {created : List Obj
   · exact mem_of_getElem? h1
 
 mutual
-  theorem InputsGrounded.toSimple {inputs : Finset Object} {created : List Object}
-      (h : InputsGrounded inputs created) : InputsGroundedSimple inputs created :=
+  theorem InputsGrounded.toSimple0 {inputs : Finset Object} {created : List Object}
+      (h : InputsGrounded inputs created) : InputsGroundedSimple0 inputs created :=
     match h with
     | .empty _ _ h => by subst h; intro x hx; simp at hx
-    | .single _ _ h => h.toSimple
-    | .pair _ _ h => h.toSimple
-    | .recursive _ _ h => h.toSimple
+    | .single _ _ h => h.toSimple0
+    | .pair _ _ h => h.toSimple0
+    | .recursive _ _ h => h.toSimple0
 
-  theorem InputsGroundedRecursive.toSimple {inputs : Finset Object} {created : List Object}
-      (h : InputsGroundedRecursive inputs created) : InputsGroundedSimple inputs created :=
+  theorem InputsGroundedRecursive.toSimple0 {inputs : Finset Object} {created : List Object}
+      (h : InputsGroundedRecursive inputs created) : InputsGroundedSimple0 inputs created :=
     match h with
     | .mk _ _ first second mid prev i j h1 h2 h3 h4 h5 => by
       obtain ⟨-, rfl⟩ := h2
       obtain ⟨-, rfl⟩ := h4
-      have ih := h5.toSimple
+      have ih := h5.toSimple0
       intro x hx
       simp at hx
       rcases hx with rfl | rfl | hx
@@ -94,8 +99,8 @@ mutual
       · exact ih x hx
 end
 
-theorem InputsGrounded.ofSimple (inputs : Finset Object) (created : List Object)
-    (h : InputsGroundedSimple inputs created) : InputsGrounded inputs created := by
+theorem InputsGrounded.ofSimple0 (inputs : Finset Object) (created : List Object)
+    (h : InputsGroundedSimple0 inputs created) : InputsGrounded inputs created := by
   obtain hc | hc | hc : inputs.card = 0 ∨ inputs.card = 1 ∨ 1 < inputs.card := by omega
   · exact .empty _ _ (Finset.card_eq_zero.mp hc)
   · obtain ⟨x, rfl⟩ := Finset.card_eq_one.mp hc
@@ -106,7 +111,7 @@ theorem InputsGrounded.ofSimple (inputs : Finset Object) (created : List Object)
     obtain ⟨i, hi⟩ := mem_getElem? (h a ha)
     obtain ⟨j, hj⟩ := mem_getElem? (h b hb)
     have hrec : InputsGrounded ((inputs.erase b).erase a) created :=
-      InputsGrounded.ofSimple _ created fun x hx =>
+      InputsGrounded.ofSimple0 _ created fun x hx =>
         h x (Finset.mem_of_mem_erase (Finset.mem_of_mem_erase hx))
     refine .recursive _ _ (.mk _ _ a b _ _ i j hi ⟨Finset.notMem_erase a _, rfl⟩ hj
       ⟨?_, ?_⟩ hrec)
@@ -120,12 +125,12 @@ decreasing_by
     Finset.card_erase_of_mem hab'
   omega
 
-theorem inputsGrounded_iff_inputsGroundedSimple (inputs : Finset Object) (created : List Object) :
-    InputsGrounded inputs created ↔ InputsGroundedSimple inputs created :=
-  ⟨InputsGrounded.toSimple, InputsGrounded.ofSimple inputs created⟩
+theorem inputsGrounded_iff_inputsGroundedSimple0 (inputs : Finset Object) (created : List Object) :
+    InputsGrounded inputs created ↔ InputsGroundedSimple0 inputs created :=
+  ⟨InputsGrounded.toSimple0, InputsGrounded.ofSimple0 inputs created⟩
 
 --
--- # ReplayActions ↔ ReplayActionsSimple
+-- # ReplayActions ↔ ReplayActionsSimple0
 --
 -- How it works
 --
@@ -143,15 +148,15 @@ theorem inputsGrounded_iff_inputsGroundedSimple (inputs : Finset Object) (create
 -- {mid with nullifiers := end_tx.nullifiers} reduces to the fast path's
 -- after_tx = {before_tx with live := new_live}.
 --
--- toSimple — the mutual pair mirrors which predicates are actually mutually
--- recursive (ReplayActions ↔ ReplayActionsStep), same pattern as the
--- InputsGrounded proofs: action → TransGen.single, actions_step →
--- TransGen.head, and action_insert → TransGen.single via the fast-path lemma.
+-- - toSimple0 — the mutual pair mirrors which predicates are actually mutually
+--   recursive (ReplayActions ↔ ReplayActionsStep), same pattern as the
+--   InputsGrounded proofs: action → TransGen.single, actions_step →
+--   TransGen.head, and action_insert → TransGen.single via the fast-path lemma.
 --
--- ofSimple — stated over pairs p q : Tx × Chain so the TransGen motive is
--- directly usable, then head_induction_on peels one ReplayAction at a time
--- into action/actions_step constructors. The final iff applies it at literal
--- pairs, where p.1/p.2 reduce, so no repackaging lemma is needed.
+-- - ofSimple0 — stated over pairs p q : Tx × Chain so the TransGen motive is
+--   directly usable, then head_induction_on peels one ReplayAction at a time
+--   into action/actions_step constructors. The final iff applies it at literal
+--   pairs, where p.1/p.2 reduce, so no repackaging lemma is needed.
 
 -- Soundness of the K=1 fast path: everything ReplayActionInsert proves, the
 -- long path (ReplayAction → ReplayContents → ReplayElement → ReplayInsert)
@@ -172,37 +177,150 @@ theorem ReplayActionInsert.toReplayAction
     rfl h3
 
 mutual
-  theorem ReplayActions.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+  theorem ReplayActions.toSimple0 {before_tx after_tx : Tx} {before_chain after_chain : Chain}
       (h : ReplayActions before_tx after_tx before_chain after_chain) :
-      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
+      ReplayActionsSimple0 before_tx after_tx before_chain after_chain :=
     match h with
     | .action _ _ _ _ h => Relation.TransGen.single h
-    | .actions_step _ _ _ _ h => h.toSimple
+    | .actions_step _ _ _ _ h => h.toSimple0
     | .action_insert _ _ _ _ h => Relation.TransGen.single h.toReplayAction
 
-  theorem ReplayActionsStep.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+  theorem ReplayActionsStep.toSimple0 {before_tx after_tx : Tx} {before_chain after_chain : Chain}
       (h : ReplayActionsStep before_tx after_tx before_chain after_chain) :
-      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
+      ReplayActionsSimple0 before_tx after_tx before_chain after_chain :=
     match h with
-    | .mk _ _ _ _ _ _ h1 h2 => Relation.TransGen.head h1 h2.toSimple
+    | .mk _ _ _ _ _ _ h1 h2 => Relation.TransGen.head h1 h2.toSimple0
 end
 
-theorem ReplayActions.ofSimple {p q : Tx × Chain}
+theorem ReplayActions.ofSimple0 {p q : Tx × Chain}
     (h : Relation.TransGen (fun before after : Tx × Chain => ReplayAction before.1 after.1 before.2 after.2) p q) :
     ReplayActions p.1 q.1 p.2 q.2 := by
   induction h using Relation.TransGen.head_induction_on with
   | single h => exact .action _ _ _ _ h
   | head h1 _ ih => exact .actions_step _ _ _ _ (.mk _ _ _ _ _ _ h1 ih)
 
-theorem replayActions_iff_replayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+theorem replayActions_iff_replayActionsSimple0 (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
     ReplayActions before_tx after_tx before_chain after_chain ↔
-      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
-  ⟨ReplayActions.toSimple, ReplayActions.ofSimple⟩
+      ReplayActionsSimple0 before_tx after_tx before_chain after_chain :=
+  ⟨ReplayActions.toSimple0, ReplayActions.ofSimple0⟩
 
+--
+-- # ReplayContents ↔ ReplayContentsSimple0
+--
+-- Same architecture as the ReplayActions proof, scaled to five mutual
+-- branches:
+--
+-- - toSimple0 — one theorem per predicate in the mutual cluster. The
+--   interesting arms are StepInsert/StepMutate: their constructor fields are
+--   repacked verbatim into a ReplayInsert.mk/ReplayMutate.mk (note h1 h2 h3 h4
+--   pass through unchanged — the inlined clauses are definitionally the
+--   standalone predicate's clauses, with ins.new/pair.old projections reducing
+--   where needed). This is the checked version of your podlang comment "the body
+--   of ReplayInsert/ReplayMutate is inlined here": if the inlining ever drifts
+--   from the standalone predicate, these two arms stop compiling.
+--   StepDelete/StepAction just wrap their h1 in the corresponding ReplayElement
+--   constructor, since they delegate rather than inline.
+--
+-- - ofSimple0 — head_induction_on again; each peeled ReplayElement head is
+--   case-split and rebuilt as the matching Step* constructor, packing the loose
+--   fields back into the Ins/Pair records (⟨new, new_live⟩, ⟨old, new⟩) with the
+--   tail supplied by the induction hypothesis.
 
-theorem replayContents_iff_replayContentsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
-    ReplayActions before_tx after_tx before_chain after_chain ↔
-      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+-- The four Step* variants are sound inlinings: each proves exactly one
+-- ReplayElement head followed by a ReplayContents tail.
+mutual
+  theorem ReplayContents.toSimple0 {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContents before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
+    match h with
+    | .element _ _ _ _ h => Relation.TransGen.single h
+    | .insert _ _ _ _ h => h.toSimple0
+    | .mutate _ _ _ _ h => h.toSimple0
+    | .delete _ _ _ _ h => h.toSimple0
+    | .action _ _ _ _ h => h.toSimple0
+
+  theorem ReplayContentsStepInsert.toSimple0 {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepInsert before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ ins guard h1 h2 h3 h4 h5 =>
+      Relation.TransGen.head
+        (.insert _ _ _ _ (.mk _ _ _ _ ins.new ins.new_live guard h1 h2 h3 h4)) h5.toSimple0
+
+  theorem ReplayContentsStepMutate.toSimple0 {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepMutate before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ pair guard h1 h2 h3 h4 =>
+      Relation.TransGen.head
+        (.mutate _ _ _ _ (.mk _ _ _ _ pair.old pair.new guard h1 h2 h3)) h4.toSimple0
+
+  theorem ReplayContentsStepDelete.toSimple0 {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepDelete before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ h1 h2 => Relation.TransGen.head (.delete _ _ _ _ h1) h2.toSimple0
+
+  theorem ReplayContentsStepAction.toSimple0 {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepAction before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ h1 h2 => Relation.TransGen.head (.action _ _ _ _ h1) h2.toSimple0
+end
+
+theorem ReplayContents.ofSimple0 {p q : Tx × Chain}
+    (h : Relation.TransGen (fun before after : Tx × Chain => ReplayElement before.1 after.1 before.2 after.2) p q) :
+    ReplayContents p.1 q.1 p.2 q.2 := by
+  induction h using Relation.TransGen.head_induction_on with
+  | single h => exact .element _ _ _ _ h
+  | head h1 _ ih =>
+    match h1 with
+    | .insert _ _ _ _ (.mk _ _ _ _ new new_live guard hh1 hh2 hh3 hh4) =>
+      exact .insert _ _ _ _ (.mk _ _ _ _ _ _ ⟨new, new_live⟩ guard hh1 hh2 hh3 hh4 ih)
+    | .mutate _ _ _ _ (.mk _ _ _ _ old new guard hh1 hh2 hh3) =>
+      exact .mutate _ _ _ _ (.mk _ _ _ _ _ _ ⟨old, new⟩ guard hh1 hh2 hh3 ih)
+    | .delete _ _ _ _ hd => exact .delete _ _ _ _ (.mk _ _ _ _ _ _ hd ih)
+    | .action _ _ _ _ ha => exact .action _ _ _ _ (.mk _ _ _ _ _ _ ha ih)
+
+theorem replayContents_iff_replayContentsSimple0 (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+    ReplayContents before_tx after_tx before_chain after_chain ↔
+      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
+  ⟨ReplayContents.toSimple0, ReplayContents.ofSimple0⟩
+
+--
+-- Stage 1
+--
+
+theorem ReplayContentsSimple.toTransGen {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+    (h : ReplayContentsSimple before_tx after_tx before_chain after_chain) :
+    Relation.TransGen (fun before after : Tx × Chain => ReplayElementSimple before.1 after.1 before.2 after.2)
+      (before_tx, before_chain) (after_tx, after_chain) :=
+  match h with
+  | .single _ _ _ _ h => Relation.TransGen.single h
+  | .head _ _ _ _ _ _ h1 h2 => Relation.TransGen.head h1 h2.toTransGen
+
+theorem ReplayContentsSimple.ofTransGen {p q : Tx × Chain}
+    (h : Relation.TransGen (fun before after : Tx × Chain => ReplayElementSimple before.1 after.1 before.2 after.2) p q) :
+    ReplayContentsSimple p.1 q.1 p.2 q.2 := by
+  induction h using Relation.TransGen.head_induction_on with
+  | single h => exact .single _ _ _ _ h
+  | head h1 _ ih => exact .head _ _ _ _ _ _ h1 ih
+
+-- TransGen bridge for ReplayContentsSimple which is defined as inductive following the same shape.
+theorem replayContentsSimple_iff_transGen (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+    ReplayContentsSimple before_tx after_tx before_chain after_chain ↔
+      Relation.TransGen (fun before after : Tx × Chain => ReplayElementSimple before.1 after.1 before.2 after.2)
+        (before_tx, before_chain) (after_tx, after_chain) :=
+  ⟨ReplayContentsSimple.toTransGen, ReplayContentsSimple.ofTransGen⟩
+
+theorem replayContentsSimple0_iff_replayContentsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+    ReplayContents before_tx after_tx before_chain after_chain ↔
+      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
+  by sorry
+
+theorem replayActionsSimple0_iff_replayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+    ReplayActionsSimple0 before_tx after_tx before_chain after_chain ↔
+      ReplayActionsSimple0 before_tx after_tx before_chain after_chain :=
   by sorry
 
 end TxLib
