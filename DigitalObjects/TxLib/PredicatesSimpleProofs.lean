@@ -199,4 +199,10 @@ theorem replayActions_iff_replayActionsSimple (before_tx after_tx : Tx) (before_
       ReplayActionsSimple before_tx after_tx before_chain after_chain :=
   ⟨ReplayActions.toSimple, ReplayActions.ofSimple⟩
 
+
+theorem replayContents_iff_replayContentsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+    ReplayActions before_tx after_tx before_chain after_chain ↔
+      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+  by sorry
+
 end TxLib
