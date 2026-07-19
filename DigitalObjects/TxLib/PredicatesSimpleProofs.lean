@@ -313,14 +313,124 @@ theorem replayContentsSimple_iff_transGen (before_tx after_tx : Tx) (before_chai
         (before_tx, before_chain) (after_tx, after_chain) :=
   ⟨ReplayContentsSimple.toTransGen, ReplayContentsSimple.ofTransGen⟩
 
+-- Faithful → Stage-2 simple, for the whole replay cluster.
+mutual
+  theorem ReplayAction.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayAction before_tx after_tx before_chain after_chain) :
+      ReplayActionSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ scope_mid inner_tx end_tx mid h1 h2 h3 h4 h5 =>
+      .mk _ _ _ _ scope_mid inner_tx end_tx mid h1 h2 h3.toSimple h4 h5
+
+  theorem ReplayContents.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContents before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .element _ _ _ _ h => .single _ _ _ _ h.toSimple
+    | .insert _ _ _ _ h => h.toSimple
+    | .mutate _ _ _ _ h => h.toSimple
+    | .delete _ _ _ _ h => h.toSimple
+    | .action _ _ _ _ h => h.toSimple
+
+  theorem ReplayContentsStepInsert.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepInsert before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ ins guard h1 h2 h3 h4 h5 =>
+      .head _ _ _ _ _ _
+        (.insert _ _ _ _ (.mk _ _ _ _ ins.new ins.new_live guard h1 h2 h3 h4)) h5.toSimple
+
+  theorem ReplayContentsStepMutate.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepMutate before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ pair guard h1 h2 h3 h4 =>
+      .head _ _ _ _ _ _
+        (.mutate _ _ _ _ (.mk _ _ _ _ pair.old pair.new guard h1 h2 h3)) h4.toSimple
+
+  theorem ReplayContentsStepDelete.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepDelete before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ h1 h2 => .head _ _ _ _ _ _ (.delete _ _ _ _ h1) h2.toSimple
+
+  theorem ReplayContentsStepAction.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsStepAction before_tx after_tx before_chain after_chain) :
+      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ _ _ h1 h2 => .head _ _ _ _ _ _ (.action _ _ _ _ h1.toSimple) h2.toSimple
+
+  theorem ReplayElement.toSimple {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayElement before_tx after_tx before_chain after_chain) :
+      ReplayElementSimple before_tx after_tx before_chain after_chain :=
+    match h with
+    | .insert _ _ _ _ h => .insert _ _ _ _ h
+    | .mutate _ _ _ _ h => .mutate _ _ _ _ h
+    | .delete _ _ _ _ h => .delete _ _ _ _ h
+    | .action _ _ _ _ h => .action _ _ _ _ h.toSimple
+end
+
+-- Stage-2 simple → faithful.
+mutual
+  theorem ReplayActionSimple.toFaithful {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayActionSimple before_tx after_tx before_chain after_chain) :
+      ReplayAction before_tx after_tx before_chain after_chain :=
+    match h with
+    | .mk _ _ _ _ scope_mid inner_tx end_tx mid h1 h2 h3 h4 h5 =>
+      .mk _ _ _ _ scope_mid inner_tx end_tx mid h1 h2 h3.toFaithful h4 h5
+
+  theorem ReplayElementSimple.toFaithful {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayElementSimple before_tx after_tx before_chain after_chain) :
+      ReplayElement before_tx after_tx before_chain after_chain :=
+    match h with
+    | .insert _ _ _ _ h => .insert _ _ _ _ h
+    | .mutate _ _ _ _ h => .mutate _ _ _ _ h
+    | .delete _ _ _ _ h => .delete _ _ _ _ h
+    | .action _ _ _ _ h => .action _ _ _ _ h.toFaithful
+
+  theorem ReplayContentsSimple.toFaithful {before_tx after_tx : Tx} {before_chain after_chain : Chain}
+      (h : ReplayContentsSimple before_tx after_tx before_chain after_chain) :
+      ReplayContents before_tx after_tx before_chain after_chain :=
+    match h with
+    | .single _ _ _ _ h => .element _ _ _ _ h.toFaithful
+    | .head _ _ _ _ _ _ h1 h2 =>
+      match h1 with
+      | .insert _ _ _ _ (.mk _ _ _ _ new new_live guard hh1 hh2 hh3 hh4) =>
+        .insert _ _ _ _ (.mk _ _ _ _ _ _ ⟨new, new_live⟩ guard hh1 hh2 hh3 hh4 h2.toFaithful)
+      | .mutate _ _ _ _ (.mk _ _ _ _ old new guard hh1 hh2 hh3) =>
+        .mutate _ _ _ _ (.mk _ _ _ _ _ _ ⟨old, new⟩ guard hh1 hh2 hh3 h2.toFaithful)
+      | .delete _ _ _ _ hd => .delete _ _ _ _ (.mk _ _ _ _ _ _ hd h2.toFaithful)
+      | .action _ _ _ _ ha => .action _ _ _ _ (.mk _ _ _ _ _ _ ha.toFaithful h2.toFaithful)
+end
+
 theorem replayContentsSimple0_iff_replayContentsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
-    ReplayContents before_tx after_tx before_chain after_chain ↔
-      ReplayContentsSimple0 before_tx after_tx before_chain after_chain :=
-  by sorry
+    ReplayContentsSimple0 before_tx after_tx before_chain after_chain ↔
+      ReplayContentsSimple before_tx after_tx before_chain after_chain :=
+  ⟨fun h => (ReplayContents.ofSimple0 h).toSimple,
+   fun h => h.toFaithful.toSimple0⟩
 
 theorem replayActionsSimple0_iff_replayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
     ReplayActionsSimple0 before_tx after_tx before_chain after_chain ↔
-      ReplayActionsSimple0 before_tx after_tx before_chain after_chain :=
-  by sorry
+      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
+  ⟨Relation.TransGen.mono (fun _ _ h => h.toSimple),
+   Relation.TransGen.mono (fun _ _ h => h.toFaithful)⟩
+
+theorem replayActions_iff_replayActionsSimple (before_tx after_tx : Tx) (before_chain after_chain : Chain) :
+    ReplayActions before_tx after_tx before_chain after_chain ↔
+      ReplayActionsSimple before_tx after_tx before_chain after_chain :=
+  (replayActions_iff_replayActionsSimple0 before_tx after_tx before_chain after_chain).trans
+    (replayActionsSimple0_iff_replayActionsSimple before_tx after_tx before_chain after_chain)
+
+theorem txFinalized_iff_txFinalizedSimple (state_header : StateHeader) (tx_final : Tx) (nullifiers : Finset Nullifier) (live : Finset Object) :
+    TxFinalized state_header tx_final nullifiers live ↔ TxFinalizedSimple state_header tx_final nullifiers live := by
+  constructor
+  · rintro ⟨before_tx, chain_start, chain_final, h1, h2, h3, ⟨hb1, hb2⟩, h5⟩
+    exact .mk _ _ _ _ before_tx chain_start chain_final
+      (InputsGrounded.toSimple0 h1) h2 h3 hb1 hb2
+      ((replayActions_iff_replayActionsSimple _ _ _ _).mp h5)
+  · rintro ⟨before_tx, chain_start, chain_final, h1, h2, h3, h4, h5, h6⟩
+    exact .mk _ _ _ _ before_tx chain_start chain_final
+      (InputsGrounded.ofSimple0 _ _ h1) h2 h3 (.mk _ _ _ h4 h5)
+      ((replayActions_iff_replayActionsSimple _ _ _ _).mpr h6)
 
 end TxLib
